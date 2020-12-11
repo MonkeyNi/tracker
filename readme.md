@@ -17,3 +17,7 @@ There will be an video and tracked result in output. Output will be saved at the
 ### Dependency
 1. OpenCV
 2. Numpy
+
+### TODO
+1. Get key frames;
+2. How to use class information;

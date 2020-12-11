@@ -91,7 +91,7 @@ if __name__ == '__main__':
     basic_box = join(os.getcwd(), 'bbox.png')
     trackerTypes = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
     TrackerType = trackerTypes[4]
-    EXTENSINO, GT_THRESHOLD, V = 'png', 0.3, '3smooth'
+    EXTENSINO, GT_THRESHOLD, V = 'png', 0.3, '0.3'
 
     track_out = f'v{V}_{TrackerType}_{GT_THRESHOLD}_track_{infer_txt}'
     Track()
