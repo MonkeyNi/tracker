@@ -60,6 +60,8 @@ def draw_box(img, infos, THRESHOLD, basic_box=False):
         x1, y1, x2, y2, catId, score, detected = info
         x2, y2 = min(w, x2), min(h, y2)
         width, height = x2-x1, y2-y1
+        if width == 0 or height == 0:
+            continue
         if os.path.exists(basic_box):
             basic_b = cv2.imread(basic_box)
             basic_b = cv2.resize(basic_b, (width, height))
