@@ -3,6 +3,7 @@ import os
 from os.path import join
 import argparse
 import numpy as np
+import time
 from utils import get_infos
 from visualization import read_images, get_FPS, draw_box
 from tracker import Tracker, Tracker_pool, Tracking
@@ -17,17 +18,17 @@ def create_video(imgs, video_out='ori_tracked.avi'):
     assert (len(imgs) != 0)
     h, w, c = list(imgs.values())[0].shape
     fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-    fps = FPS / 2
-    out = cv2.VideoWriter(join(infer_path, video_out), fourcc, fps, (2*w, h))  
+    fps = FPS
+    out = cv2.VideoWriter(join(out_folder, video_out), fourcc, fps, (2*w, h))  
     # for testing
-    out_images = join(infer_path, video_out)
+    out_images = join(out_folder, video_out)
     out_images = out_images.replace('.avi', '')
     if not os.path.exists(out_images):
         os.makedirs(out_images)
     # detection results
     detect_infos = get_infos(list(imgs.keys()), join(infer_path, infer_txt))
     # tracked results
-    track_infos = get_infos(list(imgs.keys()), join(infer_path, track_out))
+    track_infos = get_infos(list(imgs.keys()), join(out_folder, track_out))
 
     p_count = [0, 0]
     for im in imgs:
@@ -49,16 +50,20 @@ def create_video(imgs, video_out='ori_tracked.avi'):
 
 def Track():
     # save tracked output
-    tract_out = open(join(infer_path, track_out), 'w')
+    tract_out = open(join(out_folder, track_out), 'w')
     tracker_pool = Tracker_pool()
-    track_time = []
+    track_time, end_to_end_time = [], []
 
     images = get_infos(list(basic_images.keys()), join(infer_path, infer_txt))
     for image in images:
+        # print(f'There are {len(tracker_pool.trackers)} trackers.')
         frame = basic_images[image]
         infos = images[image]
+        start = time.time()
         tracking = Tracking(image, frame, infos, tracker_pool, gt_threshold=GT_THRESHOLD, TrackerType=TrackerType)
         tracked_infos, tracker_pool, tracked_time = tracking.update()
+        gap = time.time() - start
+        end_to_end_time.append(gap)
         track_time.extend(tracked_time)
         # record tracked result to txt file
         for info in tracked_infos:
@@ -68,6 +73,7 @@ def Track():
             tract_out.write(str(info[-1]) + '\n')
     tract_out.close()
     print('Average tracker speed is {}'.format(sum(track_time)/len(track_time)))
+    print('Average end to end time is {}. Max is {}.'.format(sum(end_to_end_time)/len(end_to_end_time), max(end_to_end_time)))
 
 
 def parse_args():
@@ -91,11 +97,17 @@ if __name__ == '__main__':
     basic_box = join(os.getcwd(), 'bbox.png')
     trackerTypes = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
     TrackerType = trackerTypes[4]
+    print(f'Current tracking algorithm is {TrackerType}.')
     EXTENSINO, GT_THRESHOLD, V = 'png', 0.3, '0.3'
 
-    track_out = f'v{V}_{TrackerType}_{GT_THRESHOLD}_track_{infer_txt}'
+    out_folder = join(infer_path, f'v{V}_{TrackerType}_{GT_THRESHOLD}')
+    if not os.path.exists(out_folder):
+        os.makedirs(out_folder)
+    # track_out = f'v{V}_{TrackerType}_{GT_THRESHOLD}_track_{infer_txt}'
+    track_out = f'track_{infer_txt}'
     Track()
 
     FPS = get_FPS(video)  # get the FPS
-    video_out = (f'v{V}_{TrackerType}_{GT_THRESHOLD}_{infer_txt}').replace('txt', 'avi')
+    # video_out = (f'v{V}_{TrackerType}_{GT_THRESHOLD}_{infer_txt}').replace('txt', 'avi')
+    video_out = (f'{infer_txt}').replace('txt', 'avi')
     create_video(basic_images, video_out=video_out)
