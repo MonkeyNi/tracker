@@ -4,7 +4,7 @@ from os.path import join
 import argparse
 import numpy as np
 import time
-from utils import get_infos
+from utils import get_infos, save_key_frames
 from visualization import read_images, get_FPS, draw_box
 from tracker import Tracker, Tracker_pool, Tracking
 
@@ -52,19 +52,21 @@ def Track():
     # save tracked output
     tract_out = open(join(out_folder, track_out), 'w')
     tracker_pool = Tracker_pool()
-    track_time, end_to_end_time = [], []
+    track_time, end_to_end_time, trackers = [], [], []
 
     images = get_infos(list(basic_images.keys()), join(infer_path, infer_txt))
     for image in images:
-        # print(f'There are {len(tracker_pool.trackers)} trackers.')
         frame = basic_images[image]
         infos = images[image]
+        trackers.append(len(tracker_pool.trackers))
         start = time.time()
         tracking = Tracking(image, frame, infos, tracker_pool, gt_threshold=GT_THRESHOLD, TrackerType=TrackerType)
-        tracked_infos, tracker_pool, tracked_time = tracking.update()
+        tracked_infos, tracker_pool, tracked_time, key_frames = tracking.update()
         gap = time.time() - start
         end_to_end_time.append(gap)
         track_time.extend(tracked_time)
+        # save key frames
+        save_key_frames(key_frames, key_frame_out, basic_box=basic_box)
         # record tracked result to txt file
         for info in tracked_infos:
             tract_out.write(image + ',')
@@ -72,8 +74,11 @@ def Track():
                 tract_out.write(str(ele) + ',')
             tract_out.write(str(info[-1]) + '\n')
     tract_out.close()
-    print('Average tracker speed is {}'.format(sum(track_time)/len(track_time)))
-    print('Average end to end time is {}. Max is {}.'.format(sum(end_to_end_time)/len(end_to_end_time), max(end_to_end_time)))
+    if len(track_time) == 0:
+        print('There is no detection results.')
+    else:
+        print('Average tracker speed is {}'.format(sum(track_time)/len(track_time)))
+        print('Average end to end time is {}. Max is {}.'.format(sum(end_to_end_time)/len(end_to_end_time), max(end_to_end_time)))
 
 
 def parse_args():
@@ -103,11 +108,14 @@ if __name__ == '__main__':
     out_folder = join(infer_path, f'v{V}_{TrackerType}_{GT_THRESHOLD}')
     if not os.path.exists(out_folder):
         os.makedirs(out_folder)
-    # track_out = f'v{V}_{TrackerType}_{GT_THRESHOLD}_track_{infer_txt}'
+    key_frame_out = join(out_folder, 'key_frames')
+    if not os.path.exists(key_frame_out):
+        os.makedirs(key_frame_out)
+
     track_out = f'track_{infer_txt}'
     Track()
 
     FPS = get_FPS(video)  # get the FPS
-    # video_out = (f'v{V}_{TrackerType}_{GT_THRESHOLD}_{infer_txt}').replace('txt', 'avi')
+
     video_out = (f'{infer_txt}').replace('txt', 'avi')
     create_video(basic_images, video_out=video_out)

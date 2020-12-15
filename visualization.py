@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 from os.path import join
-from utils import get_infos
 from itertools import count
 import os
 
@@ -37,7 +36,7 @@ def read_images(video):
 def draw_box(img, infos, THRESHOLD, basic_box=False):
     """
     Args:
-        infos (list[list]): [[x1,y1,x2,y2,catId,score]]
+        infos (list[list]): [[x1,y1,x2,y2,catId,score,detected]]
     """
     template = "{}: {:.2f}"
     cla_id = {
@@ -58,17 +57,19 @@ def draw_box(img, infos, THRESHOLD, basic_box=False):
     h, w, _ = img.shape
     for info in infos:
         x1, y1, x2, y2, catId, score, detected = info
-        x2, y2 = min(w, x2), min(h, y2)
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(w-1, x2), min(h-1, y2)
         width, height = x2-x1, y2-y1
         if width == 0 or height == 0:
             continue
-        if os.path.exists(basic_box):
+        if basic_box and os.path.exists(basic_box):
             basic_b = cv2.imread(basic_box)
             basic_b = cv2.resize(basic_b, (width, height))
 
 
         if float(score) >= THRESHOLD:
             if basic_box:
+                assert (img[y1:y2,x1:x2,].shape == basic_b.shape)
                 merge = cv2.addWeighted(img[y1:y2,x1:x2,], 0.9, basic_b, 1.0, 0)
                 img[y1:y2,x1:x2,] = merge
             else:

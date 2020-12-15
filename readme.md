@@ -18,6 +18,10 @@ There will be an video and tracked result in output. Output will be saved at the
 1. OpenCV
 2. Numpy
 
+### 20201215 Updata
+1. NMS
+2. Key frame extraction
+
+
 ### TODO
-1. Get key frames;
-2. How to use class information;
+1. How to use class information;

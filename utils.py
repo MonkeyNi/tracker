@@ -3,6 +3,7 @@ import os
 import collections
 import numpy as np
 import time
+from visualization import draw_box
 
 
 def createTrackerByName(trackerType):
@@ -179,12 +180,106 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.3):
     return matches, matches_2, np.array(unmatched_detections), np.array(unmatched_trackers)
 
 
-def generate_tracked_info(t_bboxes, GT_THRESHOLD):
+def generate_tracked_info(t_bboxes, tracker_pool, GT_THRESHOLD):
     """
     Return tracked info which will be saved in output txt file
     """
     tracked_info = []
-    for tb in t_bboxes:
-        info = tb + [1, min((GT_THRESHOLD + 0.1), 0.99), 2]
+    for tb, t in zip(t_bboxes, tracker_pool.trackers):
+        info = tb + [1, t.score, 2]
         tracked_info.append(info)
     return tracked_info
+
+
+def nms(dets, thresh=0.4):
+    dets = np.array(dets)
+    x1 = dets[:, 0]
+    y1 = dets[:, 1]
+    x2 = dets[:, 2]
+    y2 = dets[:, 3]
+    scores = dets[:, 4]
+
+    areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+    order = scores.argsort()[::-1]
+
+    keep = []
+    while order.size > 0:
+        i = order[0]
+        keep.append(i)
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+
+        w = np.maximum(0.0, xx2 - xx1 + 1)
+        h = np.maximum(0.0, yy2 - yy1 + 1)
+        inter = w * h
+        ovr = inter / (areas[i] + areas[order[1:]] - inter)
+
+        inds = np.where(ovr <= thresh)[0]
+        order = order[inds + 1]
+
+    return keep
+
+
+def compute_intersect(rec1, rec2):
+    S_rec1 = (rec1[2] - rec1[0]) * (rec1[3] - rec1[1])
+    S_rec2 = (rec2[2] - rec2[0]) * (rec2[3] - rec2[1])
+
+    sum_area = S_rec1 + S_rec2
+
+    left_line = max(rec1[1], rec2[1])
+    right_line = min(rec1[3], rec2[3])
+    top_line = max(rec1[0], rec2[0])
+    bottom_line = min(rec1[2], rec2[2])
+
+    # judge if there is an intersect
+    if left_line >= right_line or top_line >= bottom_line:
+        return 0
+    else:
+        intersect = (right_line - left_line) * (bottom_line - top_line)
+        return intersect
+
+
+def nms_2(infos, thresh=0.9):
+    """
+    This function is used to deal with small/big overlap problem
+    """
+    if len(infos) == 1:
+        return []
+    infos = np.array(infos)
+    dets, clas, scores = infos[:,:4], infos[:,4], infos[:,5]
+    areas = np.array([(x2-x1)*(y2-y1) for x1,y1,x2,y2 in dets])
+    inds = areas.argsort()
+    dets = dets[inds]
+    delete = []
+    for i, box in enumerate(dets):
+        flag = False
+        check = dets[i+1:]
+        for j, che in enumerate(check, i+1):
+            intersect = compute_intersect(box, che)
+            if intersect == 0:
+                continue
+            if float(intersect)/areas[inds[i]] >= thresh and clas[inds[i]] == clas[inds[j]]:
+                flag = True
+                break
+        if not flag:
+            delete.append(inds[i])
+    return delete
+
+
+def save_key_frames(key_frames, out_folder, basic_box=False):
+    """
+    Save key frames
+
+    Args:
+        key_frames ([list]): [[name, frame], [[box], score, cat_id]]
+    """
+    if len(key_frames) == 0:
+        return
+    for key_f in key_frames:
+        img_name, img = key_f[0]
+        infos = key_f[1][0] + [key_f[1][2]] + [key_f[1][1]] + [1]
+        img, _ = draw_box(img, [infos], 0, basic_box=basic_box)
+        img_name = str(key_f[1][2]) + '_' + img_name
+        cv2.imwrite(os.path.join(out_folder, img_name), img)
