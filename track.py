@@ -43,7 +43,7 @@ def create_video(imgs, video_out='ori_tracked.avi'):
             else:
                 blank[:, i*w:(i+1)*w, :] = imgs[im]
         out.write(blank)
-        cv2.imwrite(join(out_images, im), blank)
+        # cv2.imwrite(join(out_images, im), blank)
     print(f'After second threshold: {GT_THRESHOLD}, detected lesion increase from {p_count[0]} to {p_count[1]}.')
     out.release()
 
@@ -76,9 +76,9 @@ def Track():
             tract_out.write(str(info[-1]) + '\n')
     tract_out.close()
     if len(track_time) == 0:
-        print('There is no detection results.')
+        print('\nThere is no detection results.')
     else:
-        print('Average tracker speed is {}'.format(sum(track_time)/len(track_time)))
+        print('\nAverage tracker speed is {}'.format(sum(track_time)/len(track_time)))
         print('Average end to end time is {}. Max is {}.'.format(sum(end_to_end_time)/len(end_to_end_time), max(end_to_end_time)))
 
 

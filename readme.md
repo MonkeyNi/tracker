@@ -2,12 +2,12 @@
 
 ### Test example
 ```
-python track.py --video path_to_test_video --detection_result path_to_detection_result
+python track.py --video test/test2.mp4 --detection_result test/results2_0.1.txt
 
 Detection result should has format:
     frame_name, x1, y1, x2, y2, categort_id, score
 ```
-There will be an video and tracked result in output. Output will be saved at the same folder as 'detection result'.
+There will be an video, tracked result txt fie, and key frames in output. Output will be saved at the same folder as 'detection result'.
 
 ### Key points:<br>
 1. The workflow is based on SORT;<br>
