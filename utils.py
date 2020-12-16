@@ -172,18 +172,15 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.3):
     unmatched_trackers = [i for i, _ in enumerate(trackers) if not i in matched_indices[:, 1]]
 
     # match_2 used to update lesion tracker with the lasted detection result
-    matches, matches_2 = [],[]
+    matches = []
     for m in matched_indices:
         if iou_matrix[m[0], m[1]] < iou_threshold:
             unmatched_detections.append(m[0])
             unmatched_trackers.append(m[1])
         else:
             matches.append(m.reshape(1, 2))
-            if iou_matrix[m[0], m[1]] >= min(iou_threshold*2, 0.5):
-                matches_2.append(m.reshape(1, 2))
     matches = np.empty((0,2), dtype=int) if len(matches) == 0 else np.concatenate(matches, axis=0)
-    matches_2 = np.empty((0,2), dtype=int) if len(matches_2) == 0 else np.concatenate(matches_2, axis=0)
-    return matches, matches_2, np.array(unmatched_detections), np.array(unmatched_trackers)
+    return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
 
 
 def generate_tracked_info(t_bboxes, tracker_pool, GT_THRESHOLD):

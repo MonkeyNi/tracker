@@ -5,30 +5,29 @@ import numpy as np
 
 
 class Tracker():
-    def __init__(self, frame, infos, trackerType, age=2):
+    def __init__(self, infos, trackerType, age=2):
         """
         Initialize a tracker with frame and detection information.
         Args:
-                frame ([image_name, np.array]): the frame name and value.
-                infos ([list]): [boxes, scores, cats].
+                infos ([list]): [frame ([image_name, np.array]), [boxes, scores, cats]].
                 trackerType: algorithm used to track
                 age (int, optional): to record the tracker status. Defaults to 2.
         """
-        self.frame_name = frame[0]
-        self.frame = frame[1]
-        self.bbox = infos[0]
-        self.score = infos[1]
-        self.cat = infos[2]
+        self.frame_name = infos[0][0]
+        self.frame = infos[0][1]
+        self.bbox = infos[1][0]
+        self.score = infos[1][1]
+        self.cat = infos[1][2]
         self.trackerType = trackerType
         self.age = age
         tracker = cv2.MultiTracker_create()
         tracker.add(createTrackerByName(self.trackerType), self.frame, tuple(self.bbox))
         self.tracker = tracker
-        self.tracked_pool = [infos[:-1]]
+        self.tracked_pool = [infos[1][:-1]]
         self.tracked_frame = [self.frame_name, self.frame_name]
         # key frame
         start = get_id(self.frame_name)
-        self.key_frame = [frame, infos]
+        self.key_frame = infos
         self.key_f_score = self.key_frame[1][1]
         self.key_start = start
     
@@ -77,12 +76,13 @@ class Tracker_pool():
     def empty(self):
         return True if len(self.trackers) == 0 else False
     
-    def update_match(self, i, infos, frame, max_length=5):
+    def update_match(self, i, infos, max_length=5):
         """
         Args:
             infos ([[]]]): [[box], score, catid]
         """
-        info = infos[:-1]
+        frame, info = infos
+        info = info[:-1]
         if info not in self.trackers[i].tracked_pool:
             self.trackers[i].tracked_pool.append(info)
             self.trackers[i].tracked_frame[-1] = frame[0]
@@ -90,14 +90,14 @@ class Tracker_pool():
 
 
 class Tracking():
-    def __init__(self, 
-                image, 
-                frame, 
-                infos, 
-                tracker_pool, 
-                tracked_threshold=0.3, 
-                gt_threshold=0.3,
-                TrackerType='MEDIANFLOW'):
+    def __init__(self,
+                 image,
+                 frame,
+                 infos,
+                 tracker_pool,
+                 tracked_threshold=0.3,
+                 gt_threshold=0.3,
+                 TrackerType='MEDIANFLOW'):
         """
         Do tracking for single frame
 
@@ -120,7 +120,7 @@ class Tracking():
         self.tracked_threshold = tracked_threshold
         self.tracked_time = []
         self.gt_threshold = gt_threshold
-        self.TrackerType = TrackerType
+        self.t_Type = TrackerType
 
     def update(self):
         infos, tracker_pool, frame = self.infos, self.tracker_pool, self.frame
@@ -134,17 +134,17 @@ class Tracking():
                 for i, box in enumerate(bboxes):
                     score, catid = float(infos[i][-2]), infos[i][-3]
                     if score >= GT_THRESHOLD:
-                        tracker_pool.add(Tracker([self.image, frame], [box, score, catid], self.TrackerType))
+                        tracker_pool.add(Tracker([[self.image, frame], [box, score, catid]], self.t_Type))
             ## Second: track frame, update tracker pool
             else:
                 tracked_boxes, self.tracked_time = get_track_bboxes(frame, tracker_pool)
                 # match_2 has higher iou threshold and is used to update lesion tracker
-                matched, matched_2, unmatched_detections, unmatched_trackers = associate_detections_to_trackers(
+                matched, unmatched_detections, unmatched_trackers = associate_detections_to_trackers(
                     bboxes, tracked_boxes, iou_threshold=self.tracked_threshold
                 )
                 
                 def tmp_infos(ind):
-                    return [bboxes[ind], scores[ind], cats[ind]]
+                    return [[self.image, frame], [bboxes[ind], scores[ind], cats[ind]]]
 
                 # update detection score
                 for m in matched:
@@ -152,13 +152,12 @@ class Tracking():
                     infos[m[0]][-1] = 1
                     tracker_pool.update(m[1], state=1)
                     # compute smooth cors
-                    tracker_pool.update_match(m[1], tmp_infos(m[0]), [self.image, frame])
+                    tracker_pool.update_match(m[1], tmp_infos(m[0]))
                     smoothed_cors = tracker_pool.trackers[m[1]].get_smoothed_cors(5)
                     infos[m[0]][:4] = smoothed_cors
-                # update trackers
-                for m in matched_2:
+                    # update trackers
                     if scores[m[0]] >= GT_THRESHOLD:
-                        updated_tracker = Tracker([self.image, frame], tmp_infos(m[0]), self.TrackerType)
+                        updated_tracker = Tracker(tmp_infos(m[0]), self.t_Type)
                         updated_tracker.tracked_pool = tracker_pool.trackers[m[1]].tracked_pool
                         # record start
                         updated_tracker.key_start = tracker_pool.trackers[m[1]].key_start
@@ -168,11 +167,11 @@ class Tracking():
                         tracker_pool.trackers[m[1]] = updated_tracker
                 for m in unmatched_detections:
                     if scores[m] >= GT_THRESHOLD:
-                        tracker_pool.add(Tracker([self.image, frame], tmp_infos(m), self.TrackerType))
+                        tracker_pool.add(Tracker(tmp_infos(m), self.t_Type))
                 for m in unmatched_trackers:
                     tracker_pool.update(m, state=-1)
         
-        ## Thrid: If there is no detection, update all tracker status and show tracker result
+        ## Thrid: If there is no detection, update all tracker status and show tracker prediction
         else:
             tracker_pool.update_miss()
             tracked_boxes, self.tracked_time = get_track_bboxes(frame, tracker_pool)
