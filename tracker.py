@@ -1,6 +1,6 @@
 import cv2
 from utils import createTrackerByName, get_track_bboxes, generate_tracked_info
-from utils import iou_batch, associate_detections_to_trackers, nms, nms_2
+from utils import iou_batch, associate_detections_to_trackers, nms, nms_2, get_id
 import numpy as np
 
 
@@ -25,9 +25,12 @@ class Tracker():
         tracker.add(createTrackerByName(self.trackerType), self.frame, tuple(self.bbox))
         self.tracker = tracker
         self.tracked_pool = [infos[:-1]]
+        self.tracked_frame = [self.frame_name, self.frame_name]
         # key frame
+        start = get_id(self.frame_name)
         self.key_frame = [frame, infos]
-        self.key_f_score = self.key_frame[1][-1]
+        self.key_f_score = self.key_frame[1][1]
+        self.key_start = start
     
     def get_smoothed_cors(self, n, extra_box=False):
         """
@@ -38,11 +41,6 @@ class Tracker():
             tracked_pool.append(extra_box)
         avg_bboxes = np.array([b for b, _ in tracked_pool[-n:]])
         return list(np.average(avg_bboxes, axis=0).astype(np.int64))
-
-    def update_key_frame(self, frame, infos):
-        if infos[1] > self.key_f_score:
-            self.key_frame = [frame, infos]
-            self.key_f_score = infos[1]
 
 
 class Tracker_pool():
@@ -64,7 +62,7 @@ class Tracker_pool():
     def update_all(self, maximum_trackers=5):
         # get key frames
         key_trackers = [t for t in self.trackers if t.age < 0]
-        key_frames = [t.key_frame for t in key_trackers]
+        key_frames = [t.key_frame + [t.key_start] for t in key_trackers]
         
         self.trackers = [t for t in self.trackers if t.age >= 0]
         self.trackers = self.trackers[-maximum_trackers:]
@@ -87,7 +85,7 @@ class Tracker_pool():
         info = infos[:-1]
         if info not in self.trackers[i].tracked_pool:
             self.trackers[i].tracked_pool.append(info)
-            self.trackers[i].update_key_frame(frame, infos)
+            self.trackers[i].tracked_frame[-1] = frame[0]
             self.trackers[i].tracked_pool = self.trackers[i].tracked_pool[-max_length:]
 
 
@@ -126,6 +124,8 @@ class Tracking():
 
     def update(self):
         infos, tracker_pool, frame = self.infos, self.tracker_pool, self.frame
+        # tracked_info = [[t.bbox, t.age] for t in tracker_pool.trackers]
+        # print(f'{self.image}: {tracked_info}')
         GT_THRESHOLD = self.gt_threshold
         if not infos[0][:4] == [0]*4:
             bboxes, cats, scores = [i[:4] for i in infos], [i[4] for i in infos], [i[5] for i in infos]
@@ -159,8 +159,9 @@ class Tracking():
                 for m in matched_2:
                     if scores[m[0]] >= GT_THRESHOLD:
                         updated_tracker = Tracker([self.image, frame], tmp_infos(m[0]), self.TrackerType)
-                        tracker_pool.update_match(m[1], tmp_infos(m[0]), [self.image, frame])
                         updated_tracker.tracked_pool = tracker_pool.trackers[m[1]].tracked_pool
+                        # record start
+                        updated_tracker.key_start = tracker_pool.trackers[m[1]].key_start
                         # update key frame
                         if updated_tracker.key_f_score < tracker_pool.trackers[m[1]].key_f_score:
                             updated_tracker.key_frame = tracker_pool.trackers[m[1]].key_frame
@@ -198,4 +199,6 @@ class Tracking():
             if i not in keep or i in delete:
                 infos[i][:4] = [0]*4
         key_frames = tracker_pool.update_all()
+        if len(key_frames) != 0:
+            key_frames.append(get_id(self.image))
         return infos, tracker_pool, self.tracked_time, key_frames

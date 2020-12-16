@@ -56,6 +56,7 @@ def Track():
 
     images = get_infos(list(basic_images.keys()), join(infer_path, infer_txt))
     for image in images:
+        print(f'\rCurrent processing frame is: {image}', end="")
         frame = basic_images[image]
         infos = images[image]
         trackers.append(len(tracker_pool.trackers))

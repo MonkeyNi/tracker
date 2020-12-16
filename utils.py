@@ -33,13 +33,15 @@ def createTrackerByName(trackerType):
     return tracker
 
 
-def cor_change(box):
+def cor_change(box, h, w):
     """
-    From x,y,w, h to x,y,x,y
+    Coordinate clean
     """
     box = [int(x) for x in list(box)]
-    x1, y1, w, h = box
-    return [x1, y1, w, h]
+    x1, y1, x2, y2 = box
+    x1, y1 = max(0, x1), max(0, y1)
+    x2, y2 = min(x2, w-1), min(y2, h-1)
+    return [x1, y1, x2, y2]
 
 
 def get_infos(images, infer_txt):
@@ -68,6 +70,10 @@ def get_infos(images, infer_txt):
             infos = line.split(',')
             f_name = infos[0] if infos[0].endswith('png') else f'{infos[0]}.png'
             info = infos[1:]
+            x1, y1, x2, y2 = info[:4]
+            x1, y1 = max(0, float(x1)), max(0, float(y1))
+            # x2, y2 = min(x2, w-1), min(y2, h-1)
+            info[:4] = [x1, y1, x2, y2]
             score = float(info[5])
             info = [int(float(x)) for x in info]
             info[5] = score
@@ -94,17 +100,17 @@ def get_track_bboxes(frame, tracker_pool):
         tracked_boxes: [[tracked_box]]
         tracked_time: only useful during testing
     """
+    h, w, _ = frame.shape
     tracked_boxes, tracked_time = [], []
     for tracker in tracker_pool.trackers:
         track = tracker.tracker
-        # import pdb; pdb.set_trace()
         start = time.time()
         success, track_boxes = track.update(frame)
         end = time.time()
+        # print(f'***{tracker.bbox}, {track_boxes}, {success}')
         tracked_time.append((end-start))
-        if (np.array(track_boxes) >= 0).min():
-            tracked_boxes.extend(track_boxes)
-    tracked_boxes = [cor_change(list(box)) for box in tracked_boxes]
+        tracked_boxes.extend(track_boxes)
+    tracked_boxes = [cor_change(list(box), h, w) for box in tracked_boxes]
     return tracked_boxes, tracked_time
 
 
@@ -268,18 +274,27 @@ def nms_2(infos, thresh=0.9):
     return delete
 
 
-def save_key_frames(key_frames, out_folder, basic_box=False):
+def save_key_frames(key_frames, out_folder, threshold=30, basic_box=False):
     """
     Save key frames
 
     Args:
-        key_frames ([list]): [[name, frame], [[box], score, cat_id]]
+        key_frames ([list]): [[name, frame], [[box], score, cat_id], start, end]
+        threhsold: if there are more than 30 frames (e.g 1 second) have been detected, it it key frame
     """
     if len(key_frames) == 0:
         return
-    for key_f in key_frames:
+    end = key_frames[-1]
+    for key_f in key_frames[:-1]:
         img_name, img = key_f[0]
+        img_2 = img.copy()
         infos = key_f[1][0] + [key_f[1][2]] + [key_f[1][1]] + [1]
-        img, _ = draw_box(img, [infos], 0, basic_box=basic_box)
-        img_name = str(key_f[1][2]) + '_' + img_name
-        cv2.imwrite(os.path.join(out_folder, img_name), img)
+        start = key_f[2]
+        if int(end) - int(start) >= threshold:
+            img_2, _ = draw_box(img_2, [infos], 0, basic_box=basic_box)
+            img_name = f'{key_f[1][2]}_{start}_{end}_{img_name}'
+            cv2.imwrite(os.path.join(out_folder, img_name), img_2)
+
+
+def get_id(name):
+    return name[name.index('_')+1:name.rfind('.')]
