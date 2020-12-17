@@ -164,6 +164,7 @@ class Tracking():
                         # update key frame
                         if updated_tracker.key_f_score < tracker_pool.trackers[m[1]].key_f_score:
                             updated_tracker.key_frame = tracker_pool.trackers[m[1]].key_frame
+                            updated_tracker.key_f_score = tracker_pool.trackers[m[1]].key_f_score
                         tracker_pool.trackers[m[1]] = updated_tracker
                 for m in unmatched_detections:
                     if scores[m] >= GT_THRESHOLD:
