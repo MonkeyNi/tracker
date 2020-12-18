@@ -40,6 +40,20 @@ class Tracker():
             tracked_pool.append(extra_box)
         avg_bboxes = np.array([b for b, _ in tracked_pool[-n:]])
         return list(np.average(avg_bboxes, axis=0).astype(np.int64))
+    
+    def update(self, old):
+        """
+        Used to update lesion tracker with lastest detection result
+        Args:
+            old (Tracker): old tracker keeps key frame information
+        """
+        self.tracked_pool = old.tracked_pool
+        # record start
+        self.key_start = old.key_start
+        # update key frame
+        if self.key_f_score < old.key_f_score:
+            self.key_frame = old.key_frame
+            self.key_f_score = old.key_f_score
 
 
 class Tracker_pool():
@@ -158,13 +172,7 @@ class Tracking():
                     # update trackers
                     if scores[m[0]] >= GT_THRESHOLD:
                         updated_tracker = Tracker(tmp_infos(m[0]), self.t_Type)
-                        updated_tracker.tracked_pool = tracker_pool.trackers[m[1]].tracked_pool
-                        # record start
-                        updated_tracker.key_start = tracker_pool.trackers[m[1]].key_start
-                        # update key frame
-                        if updated_tracker.key_f_score < tracker_pool.trackers[m[1]].key_f_score:
-                            updated_tracker.key_frame = tracker_pool.trackers[m[1]].key_frame
-                            updated_tracker.key_f_score = tracker_pool.trackers[m[1]].key_f_score
+                        updated_tracker.update(tracker_pool.trackers[m[1]])
                         tracker_pool.trackers[m[1]] = updated_tracker
                 for m in unmatched_detections:
                     if scores[m] >= GT_THRESHOLD:
