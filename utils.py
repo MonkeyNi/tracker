@@ -261,7 +261,7 @@ def nms_2(infos, thresh=0.9):
     inds = areas.argsort()
     dets = dets[inds]
     delete = []
-    for i, box in enumerate(dets):
+    for i, box in enumerate(dets[:-1]):
         flag = False
         check = dets[i+1:]
         for j, che in enumerate(check, i+1):

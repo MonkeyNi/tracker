@@ -190,48 +190,17 @@ class Tracking():
                 for m in unmatched_detections:
                     if scores[m] >= GT_THRESHOLD:
                         tracker_pool.add(Tracker(tmp_infos(m), self.t_Type))
-                for m in unmatched_trackers:
-                    tracker_pool.update(m, state=-1)
+                # unmatch trackers. e.g. one det with two trackers
+                _t_pool = Tracker_pool()
+                _t_pool.trackers = [tracker_pool.trackers[m] for m in unmatched_trackers]
+                update_infos, only_tracked = self.track_only_update(_t_pool)
+                infos.extend(update_infos)
+                for i, m in enumerate(unmatched_trackers):
+                    tracker_pool.trackers[m] = _t_pool.trackers[i]
         
         ## Thrid: If there is no detection, update all tracker status and show tracker prediction
         else:
-            tracked_boxes, self.tracked_time = get_track_bboxes(frame, tracker_pool)
-            if len(tracked_boxes) == 1 and set(tracked_boxes[0]) == {0}:
-                pass
-            elif len(tracked_boxes) != 0:
-                track_only_filter = []
-                # calculate IoU to filter some unaccurate tracked bboxes
-                tracker_bboxes = [t.bbox for t in tracker_pool.trackers]
-                t_frame = [t.frame for t in tracker_pool.trackers]
-                ious = iou_batch(tracked_boxes, tracker_bboxes)
-                # calculate cosine similiarity
-                dets = [get_roi(box, f) for box, f in zip(tracker_bboxes, t_frame)]
-                trs = [get_roi(box, frame) for box in tracked_boxes]
-                # if self.image == 'frame_0001388.png':
-                #     import pdb; pdb.set_trace()
-                cosine_sim = cosine_distance(dets, trs)
-                for i in range(len(tracked_boxes)):
-                    if cosine_sim[i] > 0.05 or ious[i][i] < self.tracked_threshold*2:
-                        track_only_filter.append(i)
-                        tracker_pool.update(i, state=-1)
-                    else:
-                        tracker_pool.update(i, state=1)
-
-                infos = generate_tracked_info(tracked_boxes, tracker_pool, GT_THRESHOLD)
-                smoothed_boxes = []
-                # get smoothed boxes
-                for i, info in enumerate(infos):
-                    if i not in track_only_filter:
-                        smoothed_b = tracker_pool.trackers[i].get_smoothed_cors(5, extra_box=[info[:4], info[4]])
-                        smoothed_boxes.append(smoothed_b)
-                        infos[i][:4] = smoothed_b
-                    else:
-                        infos[i][:4] = [0]*4
-                ## TODO: try to use image features cosine similarity instead of image (if need)
-
-                # count tracked_only
-                if len(track_only_filter) < len(tracked_boxes):
-                    only_tracked += 1
+            infos, only_tracked = self.track_only_update(self.tracker_pool, infos=self.infos)
 
         # NMS
         keep = nms([info[:4]+[info[5]] for info in infos])
@@ -243,3 +212,55 @@ class Tracking():
         if len(key_frames) != 0:
             key_frames.append(get_id(self.image))
         return infos, tracker_pool, self.tracked_time, key_frames, only_tracked
+
+    def track_only_update(self, tracker_pool, infos=[]):
+        """
+        This function is used to deal with 'no detection but tracked' situation
+
+        Args:
+            infos ([type]): [description]
+            tracker_pool ([type]): [description]
+
+        Returns:
+            [type]: [description]
+        """
+        frame, GT_THRESHOLD = self.frame, self.gt_threshold
+        only_tracked = 0  # for test
+
+        tracked_boxes, self.tracked_time = get_track_bboxes(frame, tracker_pool)
+        if len(tracked_boxes) == 1 and set(tracked_boxes[0]) == {0}:
+            pass
+        elif len(tracked_boxes) != 0:
+            track_only_filter = []
+            # calculate IoU to filter some unaccurate tracked bboxes
+            tracker_bboxes = [t.bbox for t in tracker_pool.trackers]
+            t_frame = [t.frame for t in tracker_pool.trackers]
+            ious = iou_batch(tracked_boxes, tracker_bboxes)
+            # calculate cosine similiarity
+            dets = [get_roi(box, f) for box, f in zip(tracker_bboxes, t_frame)]
+            trs = [get_roi(box, frame) for box in tracked_boxes]
+            cosine_sim = cosine_distance(dets, trs)
+            for i in range(len(tracked_boxes)):
+                if cosine_sim[i] > 0.05 or ious[i][i] < self.tracked_threshold*2:
+                    track_only_filter.append(i)
+                    tracker_pool.update(i, state=-1)
+                else:
+                    tracker_pool.update(i, state=1)
+
+            infos = generate_tracked_info(tracked_boxes, tracker_pool, GT_THRESHOLD)
+            smoothed_boxes = []
+            # get smoothed boxes
+            for i, info in enumerate(infos):
+                if i not in track_only_filter:
+                    smoothed_b = tracker_pool.trackers[i].get_smoothed_cors(5, extra_box=[info[:4], info[4]])
+                    smoothed_boxes.append(smoothed_b)
+                    infos[i][:4] = smoothed_b
+                else:
+                    infos[i][:4] = [0]*4
+            ## TODO: try to use image features cosine similarity instead of image (if need)
+
+            # count tracked_only
+            if len(track_only_filter) < len(tracked_boxes):
+                only_tracked += 1
+        return infos, only_tracked
+
