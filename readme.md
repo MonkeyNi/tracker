@@ -18,10 +18,13 @@ There will be an video, tracked result txt fie, and key frames in output. Output
 1. OpenCV
 2. Numpy
 
-### 20201215 Update
+### Update
+#### 20201215
 1. NMS
 2. Key frame extraction
+#### 20201223
+1. Consine similarity on RoI image
 
 
 ### TODO
-1. How to use class information;
+1. Consine similarty on RoI features
