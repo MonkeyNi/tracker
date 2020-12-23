@@ -271,7 +271,7 @@ def nms_2(infos, thresh=0.9):
             if float(intersect)/areas[inds[i]] >= thresh and clas[inds[i]] == clas[inds[j]]:
                 flag = True
                 break
-        if not flag:
+        if flag:
             delete.append(inds[i])
     return delete
 
