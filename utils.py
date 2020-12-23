@@ -37,10 +37,14 @@ def cor_change(box, h, w):
     """
     Coordinate clean
     """
+    if set(box) == {0}:
+        return box
     box = [int(x) for x in list(box)]
     x1, y1, x2, y2 = box
     x1, y1 = max(0, x1), max(0, y1)
     x2, y2 = min(x2, w-1), min(y2, h-1)
+    if x1 >= x2 or y1 >= y2:
+        return [0, 0, 5, 5]
     return [x1, y1, x2, y2]
 
 
@@ -107,9 +111,13 @@ def get_track_bboxes(frame, tracker_pool):
         start = time.time()
         success, track_boxes = track.update(frame)
         end = time.time()
-        # print(f'***{tracker.bbox}, {track_boxes}, {success}')
         tracked_time.append((end-start))
+        # print(f'***Track {success}')
+        if not success:
+            track_boxes = [[0, 0, 5, 5]]
+        # print(f'***{tracker.bbox}, {track_boxes}, {success}')
         tracked_boxes.extend(track_boxes)
+        # print(tracked_boxes)
     tracked_boxes = [cor_change(list(box), h, w) for box in tracked_boxes]
     return tracked_boxes, tracked_time
 
@@ -295,3 +303,8 @@ def save_key_frames(key_frames, out_folder, threshold=30, basic_box=False):
 
 def get_id(name):
     return name[name.index('_')+1:name.rfind('.')]
+
+
+def get_roi(box, frame):
+    assert (len(box) == 4)
+    return frame[box[1]:max(box[3], 5), box[0]:max(box[2], 5), :]

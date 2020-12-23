@@ -1,6 +1,8 @@
 import cv2
 from utils import createTrackerByName, get_track_bboxes, generate_tracked_info
 from utils import iou_batch, associate_detections_to_trackers, nms, nms_2, get_id
+from utils import get_roi
+from matching import cosine_distance
 import numpy as np
 
 
@@ -38,7 +40,7 @@ class Tracker():
         tracked_pool = self.tracked_pool
         if extra_box:
             tracked_pool.append(extra_box)
-        avg_bboxes = np.array([b for b, _ in tracked_pool[-n:]])
+        avg_bboxes = np.asarray([b for b, _ in tracked_pool[-n:]])
         return list(np.average(avg_bboxes, axis=0).astype(np.int64))
     
     def update(self, old):
@@ -139,7 +141,6 @@ class Tracking():
     def update(self):
         infos, tracker_pool, frame = self.infos, self.tracker_pool, self.frame
         # tracked_info = [[t.bbox, t.age] for t in tracker_pool.trackers]
-        # print(f'{self.image}: {tracked_info}')
         GT_THRESHOLD = self.gt_threshold
         if not infos[0][:4] == [0]*4:
             bboxes, cats, scores = [i[:4] for i in infos], [i[4] for i in infos], [i[5] for i in infos]
@@ -152,7 +153,7 @@ class Tracking():
             ## Second: track frame, update tracker pool
             else:
                 tracked_boxes, self.tracked_time = get_track_bboxes(frame, tracker_pool)
-                # match_2 has higher iou threshold and is used to update lesion tracker
+                # match has higher iou threshold and is used to update lesion tracker
                 matched, unmatched_detections, unmatched_trackers = associate_detections_to_trackers(
                     bboxes, tracked_boxes, iou_threshold=self.tracked_threshold
                 )
@@ -182,24 +183,40 @@ class Tracking():
         
         ## Thrid: If there is no detection, update all tracker status and show tracker prediction
         else:
-            tracker_pool.update_miss()
             tracked_boxes, self.tracked_time = get_track_bboxes(frame, tracker_pool)
-            if len(tracked_boxes) != 0:
+            if len(tracked_boxes) == 1 and set(tracked_boxes[0]) == {0}:
+                pass
+            elif len(tracked_boxes) != 0:
+                track_only_filter = []
+                # calculate IoU to filter some unaccurate tracked bboxes
+                tracker_bboxes = [t.bbox for t in tracker_pool.trackers]
+                t_frame = [t.frame for t in tracker_pool.trackers]
+                ious = iou_batch(tracked_boxes, tracker_bboxes)
+                # calculate cosine similiarity
+                dets = [get_roi(box, f) for box, f in zip(tracker_bboxes, t_frame)]
+                trs = [get_roi(box, frame) for box in tracked_boxes]
+                # if self.image == 'frame_0001388.png':
+                #     import pdb; pdb.set_trace()
+                cosine_sim = cosine_distance(dets, trs)
+                for i in range(len(tracked_boxes)):
+                    if cosine_sim[i] > 0.05 or ious[i][i] < self.tracked_threshold*2:
+                    # if ious[i][i] < self.tracked_threshold*2:
+                        track_only_filter.append(i)
+                        tracker_pool.update(i, state=-1)
+
                 infos = generate_tracked_info(tracked_boxes, tracker_pool, GT_THRESHOLD)
                 smoothed_boxes = []
                 # get smoothed boxes
                 for i, info in enumerate(infos):
-                    smoothed_b = tracker_pool.trackers[i].get_smoothed_cors(5, extra_box=[info[:4], info[4]])
-                    smoothed_boxes.append(smoothed_b)
-                    infos[i][:4] = smoothed_b
-                # use iou to filter some unaccurate tracked bboxes
-                ## TODO: try to use some features
-                tracker_bboxes = [t.bbox for t in tracker_pool.trackers]
-                ious = iou_batch(smoothed_boxes, tracker_bboxes)
-                for i in range(len(smoothed_boxes)):
-                    if ious[i][i] < self.tracked_threshold*2:
+                    if i not in track_only_filter:
+                        smoothed_b = tracker_pool.trackers[i].get_smoothed_cors(5, extra_box=[info[:4], info[4]])
+                        smoothed_boxes.append(smoothed_b)
+                        infos[i][:4] = smoothed_b
+                    else:
                         infos[i][:4] = [0]*4
-        
+                ## TODO: try to use image features cosine similarity instead of image (if need)
+
+
         # NMS
         keep = nms([info[:4]+[info[5]] for info in infos])
         delete = nms_2([info[:-1] for info in infos])

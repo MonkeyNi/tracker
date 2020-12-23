@@ -27,6 +27,7 @@ def read_images(video):
     images = {}
     while success:
         the_id = str(next(frame_id)).zfill(5)
+        # img = img[:, -565:, :]
         images[f'frame_{the_id}.png'] = img
         success, img = vidcap.read()
     vidcap.release()
@@ -60,7 +61,7 @@ def draw_box(img, infos, THRESHOLD, basic_box=False):
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(w-1, x2), min(h-1, y2)
         width, height = x2-x1, y2-y1
-        if width == 0 or height == 0:
+        if width <= 0 or height <= 0:
             continue
         if basic_box and os.path.exists(basic_box):
             basic_b = cv2.imread(basic_box)
