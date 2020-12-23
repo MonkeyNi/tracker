@@ -37,7 +37,7 @@ def cor_change(box, h, w):
     """
     Coordinate clean
     """
-    if set(box) == {0}:
+    if box == [0, 0, 5, 5]:
         return box
     box = [int(x) for x in list(box)]
     x1, y1, x2, y2 = box
@@ -112,12 +112,9 @@ def get_track_bboxes(frame, tracker_pool):
         success, track_boxes = track.update(frame)
         end = time.time()
         tracked_time.append((end-start))
-        # print(f'***Track {success}')
         if not success:
-            track_boxes = [[0, 0, 5, 5]]
-        # print(f'***{tracker.bbox}, {track_boxes}, {success}')
-        tracked_boxes.extend(track_boxes)
-        # print(tracked_boxes)
+            track_boxes = [0, 0, 5, 5]
+        tracked_boxes.extend([track_boxes])
     tracked_boxes = [cor_change(list(box), h, w) for box in tracked_boxes]
     return tracked_boxes, tracked_time
 

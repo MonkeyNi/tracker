@@ -22,9 +22,9 @@ class Tracker():
         self.cat = infos[1][2]
         self.trackerType = trackerType
         self.age = age
-        tracker = cv2.MultiTracker_create()
-        tracker.add(createTrackerByName(self.trackerType), self.frame, tuple(self.bbox))
-        self.tracker = tracker
+        # init single tracker
+        self.tracker = createTrackerByName(self.trackerType)
+        self.tacker_bool = self.tracker.init(self.frame, tuple(self.bbox))
         self.tracked_pool = [infos[1][:-1]]
         self.tracked_frame = [self.frame_name, self.frame_name]
         # key frame
@@ -103,6 +103,20 @@ class Tracker_pool():
             self.trackers[i].tracked_pool.append(info)
             self.trackers[i].tracked_frame[-1] = frame[0]
             self.trackers[i].tracked_pool = self.trackers[i].tracked_pool[-max_length:]
+        
+    def update_poolTracker(self, m, infos, t_Type):
+        """
+        Use the lastest detection result init tracker
+
+        Args:
+            m ([]): index
+            infos ([type]): used to init tracker
+            t_Type ([type]): tracker type
+        """
+        updated_tracker = Tracker(infos, t_Type)
+        updated_tracker.update(self.trackers[m[1]])
+        self.trackers[m[1]].tracker.clear()
+        self.trackers[m[1]] = updated_tracker
 
 
 class Tracking():
@@ -140,8 +154,9 @@ class Tracking():
 
     def update(self):
         infos, tracker_pool, frame = self.infos, self.tracker_pool, self.frame
-        # tracked_info = [[t.bbox, t.age] for t in tracker_pool.trackers]
+        tracked_info = [[t.bbox, t.age] for t in tracker_pool.trackers]  # for test
         GT_THRESHOLD = self.gt_threshold
+        only_tracked = 0  # for test
         if not infos[0][:4] == [0]*4:
             bboxes, cats, scores = [i[:4] for i in infos], [i[4] for i in infos], [i[5] for i in infos]
             ## First: if track is null, just add frame and bbox to tracker
@@ -153,7 +168,6 @@ class Tracking():
             ## Second: track frame, update tracker pool
             else:
                 tracked_boxes, self.tracked_time = get_track_bboxes(frame, tracker_pool)
-                # match has higher iou threshold and is used to update lesion tracker
                 matched, unmatched_detections, unmatched_trackers = associate_detections_to_trackers(
                     bboxes, tracked_boxes, iou_threshold=self.tracked_threshold
                 )
@@ -172,9 +186,7 @@ class Tracking():
                     infos[m[0]][:4] = smoothed_cors
                     # update trackers
                     if scores[m[0]] >= GT_THRESHOLD:
-                        updated_tracker = Tracker(tmp_infos(m[0]), self.t_Type)
-                        updated_tracker.update(tracker_pool.trackers[m[1]])
-                        tracker_pool.trackers[m[1]] = updated_tracker
+                        tracker_pool.update_poolTracker(m, tmp_infos(m[0]), self.t_Type)
                 for m in unmatched_detections:
                     if scores[m] >= GT_THRESHOLD:
                         tracker_pool.add(Tracker(tmp_infos(m), self.t_Type))
@@ -200,9 +212,10 @@ class Tracking():
                 cosine_sim = cosine_distance(dets, trs)
                 for i in range(len(tracked_boxes)):
                     if cosine_sim[i] > 0.05 or ious[i][i] < self.tracked_threshold*2:
-                    # if ious[i][i] < self.tracked_threshold*2:
                         track_only_filter.append(i)
                         tracker_pool.update(i, state=-1)
+                    else:
+                        tracker_pool.update(i, state=1)
 
                 infos = generate_tracked_info(tracked_boxes, tracker_pool, GT_THRESHOLD)
                 smoothed_boxes = []
@@ -216,6 +229,9 @@ class Tracking():
                         infos[i][:4] = [0]*4
                 ## TODO: try to use image features cosine similarity instead of image (if need)
 
+                # count tracked_only
+                if len(track_only_filter) < len(tracked_boxes):
+                    only_tracked += 1
 
         # NMS
         keep = nms([info[:4]+[info[5]] for info in infos])
@@ -226,4 +242,4 @@ class Tracking():
         key_frames = tracker_pool.update_all()
         if len(key_frames) != 0:
             key_frames.append(get_id(self.image))
-        return infos, tracker_pool, self.tracked_time, key_frames
+        return infos, tracker_pool, self.tracked_time, key_frames, only_tracked
