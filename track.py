@@ -19,6 +19,7 @@ def create_video(imgs, video_out='ori_tracked.avi'):
     h, w, c = list(imgs.values())[0].shape
     fourcc = cv2.VideoWriter_fourcc(*'MJPG')
     fps = FPS
+    # w = 565
     out = cv2.VideoWriter(join(out_folder, video_out), fourcc, fps, (2*w, h))  
     # for testing
     out_images = join(out_folder, video_out)
@@ -55,6 +56,7 @@ def Track():
     track_time, end_to_end_time, trackers = [], [], []
 
     images = get_infos(list(basic_images.keys()), join(infer_path, infer_txt))
+    only_T = 0
     for image in images:
         print(f'\rCurrent processing frame is: {image}', end="")
         frame = basic_images[image]
@@ -62,10 +64,11 @@ def Track():
         trackers.append(len(tracker_pool.trackers))
         start = time.time()
         tracking = Tracking(image, frame, infos, tracker_pool, gt_threshold=GT_THRESHOLD, TrackerType=TrackerType)
-        tracked_infos, tracker_pool, tracked_time, key_frames = tracking.update()
+        tracked_infos, tracker_pool, tracked_time, key_frames, only_tracked = tracking.update()
         gap = time.time() - start
         end_to_end_time.append(gap)
         track_time.extend(tracked_time)
+        only_T += only_tracked
         # save key frames
         save_key_frames(key_frames, key_frame_out, basic_box=basic_box)
         # record tracked result to txt file
@@ -80,6 +83,7 @@ def Track():
     else:
         print('\nAverage tracker speed is {}'.format(sum(track_time)/len(track_time)))
         print('Average end to end time is {}. Max is {}.'.format(sum(end_to_end_time)/len(end_to_end_time), max(end_to_end_time)))
+        print('There are {} frames are tracked only.'.format(only_T))
 
 
 def parse_args():
@@ -104,7 +108,7 @@ if __name__ == '__main__':
     trackerTypes = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
     TrackerType = trackerTypes[4]
     print(f'Current tracking algorithm is {TrackerType}.')
-    EXTENSINO, GT_THRESHOLD, V = 'png', 0.3, '0.3'
+    EXTENSINO, GT_THRESHOLD, V = 'png', 0.3, '0.5.4'
 
     out_folder = join(infer_path, f'v{V}_{TrackerType}_{GT_THRESHOLD}')
     if not os.path.exists(out_folder):

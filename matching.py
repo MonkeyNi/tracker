@@ -10,9 +10,16 @@ def norm_image(image):
     Args:
         image (np.array): ROI
     """
-    img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    img = img.flatten()
-    return img
+    ## Gray match
+    # img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # img = img.flatten()
+    # return img
+
+    # All channel match
+    img_embedding = []
+    for i in range(3):
+        img_embedding.append(image[:,:,i].flatten())
+    return img_embedding
 
 
 def cosine_distance(dets, trs, data_is_normalized=False):
@@ -39,8 +46,8 @@ def cosine_distance(dets, trs, data_is_normalized=False):
     res = []
     if not data_is_normalized:
         for a, b in zip(dets, trs):
-            a = np.asarray(a) / np.linalg.norm(a, axis=0, keepdims=True)
-            b = np.asarray(b) / np.linalg.norm(b, axis=0, keepdims=True)
-            res.append(1. - np.dot(a, b.T))
+            a = np.asarray(a) / np.linalg.norm(a, axis=1, keepdims=True)
+            b = np.asarray(b) / np.linalg.norm(b, axis=1, keepdims=True)
+            res.append(1. - (np.dot(a, b.T)).diagonal().mean())
     return res
     

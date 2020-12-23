@@ -125,7 +125,7 @@ class Tracking():
                  frame,
                  infos,
                  tracker_pool,
-                 tracked_threshold=0.3,
+                 tracked_threshold=0.2,
                  gt_threshold=0.3,
                  TrackerType='MEDIANFLOW'):
         """
@@ -193,10 +193,12 @@ class Tracking():
                 # unmatch trackers. e.g. one det with two trackers
                 _t_pool = Tracker_pool()
                 _t_pool.trackers = [tracker_pool.trackers[m] for m in unmatched_trackers]
-                update_infos, only_tracked = self.track_only_update(_t_pool)
+                _ted_box = [tracked_boxes[m] for m in unmatched_trackers]
+                update_infos, only_tracked = self.track_only_update(_t_pool, tracked_boxes=_ted_box)
                 infos.extend(update_infos)
                 for i, m in enumerate(unmatched_trackers):
                     tracker_pool.trackers[m] = _t_pool.trackers[i]
+                only_tracked = 0
         
         ## Thrid: If there is no detection, update all tracker status and show tracker prediction
         else:
@@ -213,21 +215,21 @@ class Tracking():
             key_frames.append(get_id(self.image))
         return infos, tracker_pool, self.tracked_time, key_frames, only_tracked
 
-    def track_only_update(self, tracker_pool, infos=[]):
+    def track_only_update(self, tracker_pool, infos=[], tracked_boxes=[]):
         """
         This function is used to deal with 'no detection but tracked' situation
 
         Args:
             infos ([type]): [description]
             tracker_pool ([type]): [description]
+            tracked_box: tracker prediction
 
-        Returns:
-            [type]: [description]
+        Returns: updated infos
         """
         frame, GT_THRESHOLD = self.frame, self.gt_threshold
         only_tracked = 0  # for test
-
-        tracked_boxes, self.tracked_time = get_track_bboxes(frame, tracker_pool)
+        if tracked_boxes == []:
+            tracked_boxes, self.tracked_time = get_track_bboxes(frame, tracker_pool)
         if len(tracked_boxes) == 1 and set(tracked_boxes[0]) == {0}:
             pass
         elif len(tracked_boxes) != 0:
@@ -241,7 +243,7 @@ class Tracking():
             trs = [get_roi(box, frame) for box in tracked_boxes]
             cosine_sim = cosine_distance(dets, trs)
             for i in range(len(tracked_boxes)):
-                if cosine_sim[i] > 0.05 or ious[i][i] < self.tracked_threshold*2:
+                if cosine_sim[i] > 0.1 or ious[i][i] < self.tracked_threshold*2:
                     track_only_filter.append(i)
                     tracker_pool.update(i, state=-1)
                 else:

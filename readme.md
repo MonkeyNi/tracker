@@ -9,6 +9,14 @@ Detection result should has format:
 ```
 There will be an video, tracked result txt fie, and key frames in output. Output will be saved at the same folder as 'detection result'.
 
+### Default Setting
+1. Detection threshold: 0.1
+2. Ground truth threshold: 0.3
+3. Tracked IoU threshold: 0.3
+4. Tracked only (no detection) IoU threshold: 0.6
+5. Cosine similarity threshold: 0.9
+6. Tracker age: 3 
+
 ### Key points:<br>
 1. The workflow is based on SORT;<br>
 2. Tracking algorithm is from openCV API, default is 'medianflow';<br>
@@ -19,12 +27,11 @@ There will be an video, tracked result txt fie, and key frames in output. Output
 2. Numpy
 
 ### Update
-#### 20201215
-1. NMS
-2. Key frame extraction
-#### 20201223
-1. Consine similarity on RoI image
-
+1. 20201215<br>
+    * NMS<br>
+    * Key frame extraction
+2. 20201223
+    * Consine similarity on RoI image
 
 ### TODO
 1. Consine similarty on RoI features
