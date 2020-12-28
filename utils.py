@@ -199,7 +199,7 @@ def generate_tracked_info(t_bboxes, tracker_pool, GT_THRESHOLD):
     return tracked_info
 
 
-def nms(dets, thresh=0.4):
+def nms(dets, thresh=0.3):
     dets = np.array(dets)
     x1 = dets[:, 0]
     y1 = dets[:, 1]

@@ -63,7 +63,13 @@ def Track():
         infos = images[image]
         trackers.append(len(tracker_pool.trackers))
         start = time.time()
-        tracking = Tracking(image, frame, infos, tracker_pool, gt_threshold=GT_THRESHOLD, TrackerType=TrackerType)
+        tracking = Tracking(image,
+                            frame,
+                            infos,
+                            tracker_pool,
+                            tracked_threshold=t_threshold,
+                            gt_threshold=GT_THRESHOLD,
+                            TrackerType=TrackerType)
         tracked_infos, tracker_pool, tracked_time, key_frames, only_tracked = tracking.update()
         gap = time.time() - start
         end_to_end_time.append(gap)
@@ -108,9 +114,9 @@ if __name__ == '__main__':
     trackerTypes = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
     TrackerType = trackerTypes[4]
     print(f'Current tracking algorithm is {TrackerType}.')
-    EXTENSINO, GT_THRESHOLD, V = 'png', 0.3, '0.5.4'
+    EXTENSINO, GT_THRESHOLD, t_threshold, V = 'png', 0.3, 0.2, '0.6.1'
 
-    out_folder = join(infer_path, f'v{V}_{TrackerType}_{GT_THRESHOLD}')
+    out_folder = join(infer_path, f'v{V}_{TrackerType}_{GT_THRESHOLD}_{t_threshold}')
     if not os.path.exists(out_folder):
         os.makedirs(out_folder)
     key_frame_out = join(out_folder, 'key_frames')

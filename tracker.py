@@ -72,7 +72,10 @@ class Tracker_pool():
         self.trackers.pop(i)
 
     def update(self, i, state=0):
-        self.trackers[i].age = min((self.trackers[i].age + state), 2)
+        if state >= 1:
+            self.trackers[i].age = 2  # reinitialize age
+        else:
+            self.trackers[i].age -= 1
 
     def update_all(self, maximum_trackers=5):
         # get key frames
@@ -125,7 +128,7 @@ class Tracking():
                  frame,
                  infos,
                  tracker_pool,
-                 tracked_threshold=0.2,
+                 tracked_threshold=0.25,
                  gt_threshold=0.3,
                  TrackerType='MEDIANFLOW'):
         """
@@ -151,56 +154,67 @@ class Tracking():
         self.tracked_time = []
         self.gt_threshold = gt_threshold
         self.t_Type = TrackerType
+        self.bboxes, self.scores, self.cats = [], [], []
 
     def update(self):
         infos, tracker_pool, frame = self.infos, self.tracker_pool, self.frame
-        tracked_info = [[t.bbox, t.age] for t in tracker_pool.trackers]  # for test
+        # tracked_info = [[t.bbox, t.age] for t in tracker_pool.trackers]  # for test
+        # # print(tracked_info)
         GT_THRESHOLD = self.gt_threshold
         only_tracked = 0  # for test
         if not infos[0][:4] == [0]*4:
-            bboxes, cats, scores = [i[:4] for i in infos], [i[4] for i in infos], [i[5] for i in infos]
-            ## First: if track is null, just add frame and bbox to tracker
+            self.bboxes = [i[:4] for i in infos]
+            self.cats = [i[4] for i in infos]
+            self.scores = [i[5] for i in infos]
+            ## 1 if track is null, just add frame and bbox to tracker
             if tracker_pool.empty():
-                for i, box in enumerate(bboxes):
+                for i, box in enumerate(self.bboxes):
                     score, catid = float(infos[i][-2]), infos[i][-3]
                     if score >= GT_THRESHOLD:
                         tracker_pool.add(Tracker([[self.image, frame], [box, score, catid]], self.t_Type))
-            ## Second: track frame, update tracker pool
+            ## 2 compare det results first (dets and box in tracker pool), which can save some track time
             else:
-                tracked_boxes, self.tracked_time = get_track_bboxes(frame, tracker_pool)
-                matched, unmatched_detections, unmatched_trackers = associate_detections_to_trackers(
-                    bboxes, tracked_boxes, iou_threshold=self.tracked_threshold
-                )
-                
-                def tmp_infos(ind):
-                    return [[self.image, frame], [bboxes[ind], scores[ind], cats[ind]]]
+                tracker_bboxes = [t.bbox for t in tracker_pool.trackers]
+                matched_dets, unmatched_dets, unmatched_trs = associate_detections_to_trackers(
+                        self.bboxes,
+                        tracker_bboxes,
+                        iou_threshold=0.6
+                    )
+                # 2.1 for those matched dets, no need to do track anymore
+                infos, tracker_pool = self.match(matched_dets, infos, tracker_pool)
+                # 2.2 no tracker left, only det left
+                if len(unmatched_dets) != 0 and len(unmatched_trs) == 0:
+                    tracker_pool = self.unmatched_dets(unmatched_dets, tracker_pool)
+                # 2.3 there are tracker left
+                elif len(unmatched_trs) != 0:
+                    tmp_t_pool = Tracker_pool()
+                    tmp_t_pool.trackers = [tracker_pool.trackers[m] for m in unmatched_trs]
+                    tracked_boxes, self.tracked_time = get_track_bboxes(frame, tmp_t_pool)
+                    # 2.3.1 only tracker left and no det left
+                    if len(unmatched_dets) == 0:
+                        update_infos, _ = self.track_only_update(tmp_t_pool, tracked_boxes=tracked_boxes)
+                        for i, m in enumerate(unmatched_trs):
+                            tracker_pool.trackers[m] = tmp_t_pool.trackers[i]
+                        infos.extend(update_infos)
+                    # 2.3.2 there are both det and tracker left (normal situation)
+                    else:
+                        tmp_box = [self.bboxes[m] for m in unmatched_dets]
+                        tmp_infos = [infos[m] for m in unmatched_dets]
+                        matched_ds, unmatched_ds, unmatched_ts = associate_detections_to_trackers(
+                            tmp_box,
+                            tracked_boxes,
+                            iou_threshold=self.tracked_threshold
+                        )
+                        tmp_infos, tmp_t_pool = self.match(matched_ds, tmp_infos, tmp_t_pool)
+                        tmp_t_pool = self.unmatched_dets(unmatched_ds, tmp_t_pool)
+                        tmp_update_infos, tmp_t_pool = self.unmatched_ts(unmatched_ts, tmp_t_pool, tracked_boxes)
+                        tmp_infos.extend(tmp_update_infos)
+                        for i, m in enumerate(unmatched_dets):
+                            infos[m] = tmp_infos[i]
+                        for i, m in enumerate(unmatched_trs):
+                            tracker_pool.trackers[m] = tmp_t_pool.trackers[i]
 
-                # update detection score
-                for m in matched:
-                    infos[m[0]][-2] = min((infos[m[0]][-2] + GT_THRESHOLD + 0.01), 0.99)
-                    infos[m[0]][-1] = 1
-                    tracker_pool.update(m[1], state=1)
-                    # compute smooth cors
-                    tracker_pool.update_match(m[1], tmp_infos(m[0]))
-                    smoothed_cors = tracker_pool.trackers[m[1]].get_smoothed_cors(5)
-                    infos[m[0]][:4] = smoothed_cors
-                    # update trackers
-                    if scores[m[0]] >= GT_THRESHOLD:
-                        tracker_pool.update_poolTracker(m, tmp_infos(m[0]), self.t_Type)
-                for m in unmatched_detections:
-                    if scores[m] >= GT_THRESHOLD:
-                        tracker_pool.add(Tracker(tmp_infos(m), self.t_Type))
-                # unmatch trackers. e.g. one det with two trackers
-                _t_pool = Tracker_pool()
-                _t_pool.trackers = [tracker_pool.trackers[m] for m in unmatched_trackers]
-                _ted_box = [tracked_boxes[m] for m in unmatched_trackers]
-                update_infos, only_tracked = self.track_only_update(_t_pool, tracked_boxes=_ted_box)
-                infos.extend(update_infos)
-                for i, m in enumerate(unmatched_trackers):
-                    tracker_pool.trackers[m] = _t_pool.trackers[i]
-                only_tracked = 0
-        
-        ## Thrid: If there is no detection, update all tracker status and show tracker prediction
+        ## 3 If there is no detection, update all tracker status and show tracker prediction
         else:
             infos, only_tracked = self.track_only_update(self.tracker_pool, infos=self.infos)
 
@@ -226,10 +240,9 @@ class Tracking():
 
         Returns: updated infos
         """
-        frame, GT_THRESHOLD = self.frame, self.gt_threshold
         only_tracked = 0  # for test
         if tracked_boxes == []:
-            tracked_boxes, self.tracked_time = get_track_bboxes(frame, tracker_pool)
+            tracked_boxes, self.tracked_time = get_track_bboxes(self.frame, tracker_pool)
         if len(tracked_boxes) == 1 and set(tracked_boxes[0]) == {0}:
             pass
         elif len(tracked_boxes) != 0:
@@ -240,16 +253,16 @@ class Tracking():
             ious = iou_batch(tracked_boxes, tracker_bboxes)
             # calculate cosine similiarity
             dets = [get_roi(box, f) for box, f in zip(tracker_bboxes, t_frame)]
-            trs = [get_roi(box, frame) for box in tracked_boxes]
+            trs = [get_roi(box, self.frame) for box in tracked_boxes]
             cosine_sim = cosine_distance(dets, trs)
             for i in range(len(tracked_boxes)):
-                if cosine_sim[i] > 0.1 or ious[i][i] < self.tracked_threshold*2:
+                if cosine_sim[i] > 0.1 or ious[i][i] < self.tracked_threshold:
                     track_only_filter.append(i)
                     tracker_pool.update(i, state=-1)
                 else:
                     tracker_pool.update(i, state=1)
 
-            infos = generate_tracked_info(tracked_boxes, tracker_pool, GT_THRESHOLD)
+            infos = generate_tracked_info(tracked_boxes, tracker_pool, self.gt_threshold)
             smoothed_boxes = []
             # get smoothed boxes
             for i, info in enumerate(infos):
@@ -263,6 +276,49 @@ class Tracking():
 
             # count tracked_only
             if len(track_only_filter) < len(tracked_boxes):
-                only_tracked += 1
+                only_tracked = 1
         return infos, only_tracked
 
+    def match(self, matched, infos, tracker_pool):
+        """
+        Tracker prediction match dets
+        """
+        for m in matched:
+            infos[m[0]][-2] = min((infos[m[0]][-2] + self.gt_threshold + 0.01), 0.99)
+            infos[m[0]][-1] = 1
+            tracker_pool.update(m[1], state=1)
+            # compute smooth cors
+            tracker_pool.update_match(m[1], self.tmp_infos(m[0], ))
+            smoothed_cors = tracker_pool.trackers[m[1]].get_smoothed_cors(5)
+            infos[m[0]][:4] = smoothed_cors
+            # update trackers
+            if self.scores[m[0]] >= self.gt_threshold:
+                tracker_pool.update_poolTracker(m, self.tmp_infos(m[0]), self.t_Type)
+        return infos, tracker_pool
+
+    def unmatched_dets(self, unmatched_detections, tracker_pool):
+        """
+        Deal with unmatched detection results
+        """
+        for m in unmatched_detections:
+            if self.scores[m] >= self.gt_threshold:
+                tracker_pool.add(Tracker(self.tmp_infos(m), self.t_Type))
+        return tracker_pool
+
+    def unmatched_ts(self, unmatched_trackers, tracker_pool, tracked_boxes):
+        """
+        Deal with unmatched trackers
+        """
+        _t_pool = Tracker_pool()
+        _t_pool.trackers = [tracker_pool.trackers[m] for m in unmatched_trackers]
+        _ted_box = [tracked_boxes[m] for m in unmatched_trackers]
+        update_infos, _ = self.track_only_update(_t_pool, tracked_boxes=_ted_box)
+        for i, m in enumerate(unmatched_trackers):
+            tracker_pool.trackers[m] = _t_pool.trackers[i]
+        return update_infos, tracker_pool
+
+    def tmp_infos(self, ind):
+        """
+        Help function
+        """
+        return [[self.image, self.frame], [self.bboxes[ind], self.scores[ind], self.cats[ind]]]
