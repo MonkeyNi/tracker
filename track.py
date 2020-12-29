@@ -33,7 +33,8 @@ def create_video(imgs, video_out='ori_tracked.avi'):
 
     p_count = [0, 0]
     for im in imgs:
-        ims = [imgs[im], imgs[im].copy()]
+        tmp = imgs[im].copy()
+        ims = [imgs[im], tmp]
         d_info, t_info = detect_infos[im], track_infos[im]
         blank = np.zeros([h, 2*w, c], np.uint8)
         for i, infos in enumerate([d_info, t_info]):
@@ -114,7 +115,7 @@ if __name__ == '__main__':
     trackerTypes = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
     TrackerType = trackerTypes[4]
     print(f'Current tracking algorithm is {TrackerType}.')
-    EXTENSINO, GT_THRESHOLD, t_threshold, V = 'png', 0.3, 0.2, '0.6.1'
+    EXTENSINO, GT_THRESHOLD, t_threshold, V = 'png', 0.3, 0.2, '0.6.2'
 
     out_folder = join(infer_path, f'v{V}_{TrackerType}_{GT_THRESHOLD}_{t_threshold}')
     if not os.path.exists(out_folder):

@@ -40,9 +40,9 @@ def cor_change(box, h, w):
     if box == [0, 0, 5, 5]:
         return box
     box = [int(x) for x in list(box)]
-    x1, y1, x2, y2 = box
+    x1, y1, width, height = box
     x1, y1 = max(0, x1), max(0, y1)
-    x2, y2 = min(x2, w-1), min(y2, h-1)
+    x2, y2 = min(x1+width, w-1), min(y1+height, h-1)
     if x1 >= x2 or y1 >= y2:
         return [0, 0, 5, 5]
     return [x1, y1, x2, y2]
