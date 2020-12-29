@@ -159,7 +159,7 @@ class Tracking():
     def update(self):
         infos, tracker_pool, frame = self.infos, self.tracker_pool, self.frame
         # tracked_info = [[t.bbox, t.age] for t in tracker_pool.trackers]  # for test
-        # # print(tracked_info)
+        # print(tracked_info)
         GT_THRESHOLD = self.gt_threshold
         only_tracked = 0  # for test
         if not infos[0][:4] == [0]*4:
@@ -181,17 +181,18 @@ class Tracking():
                         iou_threshold=0.6
                     )
                 # 2.1 for those matched dets, no need to do track anymore
-                infos, tracker_pool = self.match(matched_dets, infos, tracker_pool)
+                if matched_dets.shape[0] != 0: 
+                    infos, tracker_pool = self.match(matched_dets, infos, tracker_pool)
                 # 2.2 no tracker left, only det left
-                if len(unmatched_dets) != 0 and len(unmatched_trs) == 0:
-                    tracker_pool = self.unmatched_dets(unmatched_dets, tracker_pool)
-                # 2.3 there are tracker left
-                elif len(unmatched_trs) != 0:
+                if unmatched_dets.shape[0] != 0 and unmatched_trs.shape[0] == 0:
+                    tracker_pool = self.unmatched_dets(unmatched_dets, tracker_pool, self.scores)
+                # 2.3 there are trackers left
+                elif unmatched_trs.shape[0] != 0:
                     tmp_t_pool = Tracker_pool()
                     tmp_t_pool.trackers = [tracker_pool.trackers[m] for m in unmatched_trs]
                     tracked_boxes, self.tracked_time = get_track_bboxes(frame, tmp_t_pool)
                     # 2.3.1 only tracker left and no det left
-                    if len(unmatched_dets) == 0:
+                    if unmatched_dets.shape[0] == 0:
                         update_infos, _ = self.track_only_update(tmp_t_pool, tracked_boxes=tracked_boxes)
                         for i, m in enumerate(unmatched_trs):
                             tracker_pool.trackers[m] = tmp_t_pool.trackers[i]
@@ -200,13 +201,14 @@ class Tracking():
                     else:
                         tmp_box = [self.bboxes[m] for m in unmatched_dets]
                         tmp_infos = [infos[m] for m in unmatched_dets]
+                        tmp_scores = [self.scores[m] for m in unmatched_dets]
                         matched_ds, unmatched_ds, unmatched_ts = associate_detections_to_trackers(
                             tmp_box,
                             tracked_boxes,
                             iou_threshold=self.tracked_threshold
                         )
                         tmp_infos, tmp_t_pool = self.match(matched_ds, tmp_infos, tmp_t_pool)
-                        tmp_t_pool = self.unmatched_dets(unmatched_ds, tmp_t_pool)
+                        tracker_pool = self.unmatched_dets(unmatched_ds, tracker_pool, tmp_scores)
                         tmp_update_infos, tmp_t_pool = self.unmatched_ts(unmatched_ts, tmp_t_pool, tracked_boxes)
                         tmp_infos.extend(tmp_update_infos)
                         for i, m in enumerate(unmatched_dets):
@@ -296,12 +298,12 @@ class Tracking():
                 tracker_pool.update_poolTracker(m, self.tmp_infos(m[0]), self.t_Type)
         return infos, tracker_pool
 
-    def unmatched_dets(self, unmatched_detections, tracker_pool):
+    def unmatched_dets(self, unmatched_detections, tracker_pool, scores):
         """
         Deal with unmatched detection results
         """
         for m in unmatched_detections:
-            if self.scores[m] >= self.gt_threshold:
+            if scores[m] >= self.gt_threshold:
                 tracker_pool.add(Tracker(self.tmp_infos(m), self.t_Type))
         return tracker_pool
 
