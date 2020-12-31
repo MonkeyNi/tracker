@@ -26,8 +26,8 @@ def read_images(video):
     frame_id = count()
     images = {}
     while success:
-        the_id = str(next(frame_id)).zfill(5)
-        # img = img[:, -565:, :]
+        the_id = str(next(frame_id)).zfill(7)
+        img = img[:, -565:, :]
         images[f'frame_{the_id}.png'] = img
         success, img = vidcap.read()
     vidcap.release()
@@ -37,7 +37,7 @@ def read_images(video):
 def draw_box(img, infos, THRESHOLD, basic_box=False):
     """
     Args:
-        infos (list[list]): [[x1,y1,x2,y2,catId,score,detected]]
+        infos (list[list]): [[x1,y1,x2,y2,catId,score,track_id]]
     """
     template = "{}: {:.2f}"
     cla_id = {
@@ -57,7 +57,7 @@ def draw_box(img, infos, THRESHOLD, basic_box=False):
     flag = False
     h, w, _ = img.shape
     for info in infos:
-        x1, y1, x2, y2, catId, score, detected = info
+        x1, y1, x2, y2, catId, score, track_id = info
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(w-1, x2), min(h-1, y2)
         width, height = x2-x1, y2-y1
@@ -76,7 +76,7 @@ def draw_box(img, infos, THRESHOLD, basic_box=False):
             else:
                 color = Color[str(detected)[0]]
                 cv2.rectangle(img, (int(float(x1)), int(float(y1))), (int(float(x2)), int(float(y2))), color, 2)
-            cla = template.format(cla_id[int(catId)], float(score))
-            cv2.putText(img, cla, (int(float(x1)), int(float(y1))), cv2.FONT_HERSHEY_TRIPLEX, 0.5, (0, 255, 255), 1)
+            cla = f'{str(track_id).zfill(3)} {cla_id[int(catId)]}: {float(score):.2}'
+            cv2.putText(img, cla, (int(float(x1)), int(float(y1))), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255, 255, 255), 1)
             flag = True
     return img, flag

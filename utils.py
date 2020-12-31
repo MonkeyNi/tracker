@@ -59,11 +59,8 @@ def get_infos(images, infer_txt):
         infer_txt: path to detection result txt files
 
     Returns:
-        dir: {image_name: [[x1,y1,x2,y2,cla_id,score,detected]]} 
-            detected:
-                0: detected
-                1: detected and tracked
-                2: not detected but tracked
+        dir: {image_name: [[x1,y1,x2,y2,cla_id,score,track_id]]} 
+            
     """
     res = collections.defaultdict(list)
     
@@ -110,6 +107,7 @@ def get_track_bboxes(frame, tracker_pool):
         track = tracker.tracker
         start = time.time()
         success, track_boxes = track.update(frame)
+        # print(f'***{success}')
         end = time.time()
         tracked_time.append((end-start))
         if not success:
@@ -137,7 +135,7 @@ def linear_assignment(cost_matrix):
 
 def iou_batch(det_bboxes, track_bboxes):
     """
-    Compute overlap between detection results and tracked results
+    Compute IoU between detection results and tracked results
 
     Args:
         det_bboxes ([[]])
@@ -153,9 +151,14 @@ def iou_batch(det_bboxes, track_bboxes):
     w = np.maximum(0., x2 - x1)
     h = np.maximum(0., y2 - y1)
     wh = w * h
-    overlap = wh / ((det_bboxes[..., 2] - det_bboxes[..., 0]) * (det_bboxes[..., 3] - det_bboxes[..., 1])
+    # compute IoU
+    iou = wh / ((det_bboxes[..., 2] - det_bboxes[..., 0]) * (det_bboxes[..., 3] - det_bboxes[..., 1])
         + (track_bboxes[..., 2] - track_bboxes[..., 0]) * (track_bboxes[..., 3] - track_bboxes[..., 1]) - wh)
-    return overlap
+    # compute overlap
+    # overlap_dets = wh / ((det_bboxes[..., 2] - det_bboxes[..., 0]) * (det_bboxes[..., 3] - det_bboxes[..., 1]))
+    # overlap_trs = wh / ((track_bboxes[..., 2] - track_bboxes[..., 0]) * (track_bboxes[..., 3] - track_bboxes[..., 1]))
+    # overlap = max(overlap_dets, overlap_trs)
+    return iou
 
 
 def associate_detections_to_trackers(detections, trackers, iou_threshold=0.3):
@@ -163,6 +166,8 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.3):
         return np.empty((0,2), dtype=int), np.empty((0,2), dtype=int), np.arange(len(detections)), np.empty((0, 5), dtype=int)
     
     iou_matrix = iou_batch(detections, trackers)
+    # iou_matrix, overlap_matrix = iou_batch(detections, trackers)
+    # import pdb; pdb.set_trace()
     if min(iou_matrix.shape) > 0:
         a = (iou_matrix > iou_threshold).astype(np.int32)
         # one for one
@@ -276,13 +281,13 @@ def nms_2(infos, thresh=0.9):
     return delete
 
 
-def save_key_frames(key_frames, out_folder, threshold=30, basic_box=False):
+def save_key_frames(key_frames, out_folder, threshold=5, basic_box=False):
     """
     Save key frames
 
     Args:
-        key_frames ([list]): [[name, frame], [[box], score, cat_id], start, end]
-        threhsold: if there are more than 30 frames (e.g 1 second) have been detected, it it key frame
+        key_frames ([list]): [[[name, frame], [[box], score, cat_id], start, track_id], end]
+        threhsold: if there are more than 'threshold' frames (e.g 1 second) have been detected, it it key frame
     """
     if len(key_frames) == 0:
         return
@@ -290,8 +295,8 @@ def save_key_frames(key_frames, out_folder, threshold=30, basic_box=False):
     for key_f in key_frames[:-1]:
         img_name, img = key_f[0]
         img_2 = img.copy()
-        infos = key_f[1][0] + [key_f[1][2]] + [key_f[1][1]] + [1]
-        start = key_f[2]
+        start, track_id = key_f[2], key_f[3]
+        infos = key_f[1][0] + [key_f[1][2]] + [key_f[1][1]] + [track_id]
         if int(end) - int(start) >= threshold:
             img_2, _ = draw_box(img_2, [infos], 0, basic_box=basic_box)
             img_name = f'{key_f[1][2]}_{start}_{end}_{img_name}'

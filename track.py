@@ -4,9 +4,10 @@ from os.path import join
 import argparse
 import numpy as np
 import time
-from utils import get_infos, save_key_frames
+from utils import get_infos, save_key_frames, get_id
 from visualization import read_images, get_FPS, draw_box
 from tracker import Tracker, Tracker_pool, Tracking
+from itertools import count
 
 
 def create_video(imgs, video_out='ori_tracked.avi'):
@@ -19,7 +20,7 @@ def create_video(imgs, video_out='ori_tracked.avi'):
     h, w, c = list(imgs.values())[0].shape
     fourcc = cv2.VideoWriter_fourcc(*'MJPG')
     fps = FPS
-    # w = 565
+    w = 565
     out = cv2.VideoWriter(join(out_folder, video_out), fourcc, fps, (2*w, h))  
     # for testing
     out_images = join(out_folder, video_out)
@@ -57,7 +58,9 @@ def Track():
     track_time, end_to_end_time, trackers = [], [], []
 
     images = get_infos(list(basic_images.keys()), join(infer_path, infer_txt))
+    end_image = get_id(list(basic_images.keys())[-1])
     only_T = 0
+    track_id = count(start=1)
     for image in images:
         print(f'\rCurrent processing frame is: {image}', end="")
         frame = basic_images[image]
@@ -70,7 +73,8 @@ def Track():
                             tracker_pool,
                             tracked_threshold=t_threshold,
                             gt_threshold=GT_THRESHOLD,
-                            TrackerType=TrackerType)
+                            TrackerType=TrackerType,
+                            track_id=track_id)
         tracked_infos, tracker_pool, tracked_time, key_frames, only_tracked = tracking.update()
         gap = time.time() - start
         end_to_end_time.append(gap)
@@ -85,6 +89,11 @@ def Track():
                 tract_out.write(str(ele) + ',')
             tract_out.write(str(info[-1]) + '\n')
     tract_out.close()
+    # save still alive tracker key frames
+    key_frames = [t.key_frame + [t.key_start, t.track_id] for t in tracker_pool.trackers]
+    key_frames.append(end_image)
+    save_key_frames(key_frames, key_frame_out, basic_box=basic_box)
+
     if len(track_time) == 0:
         print('\nThere is no detection results.')
     else:
@@ -113,9 +122,9 @@ if __name__ == '__main__':
 
     basic_box = join(os.getcwd(), 'bbox.png')
     trackerTypes = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
-    TrackerType = trackerTypes[4]
+    TrackerType = trackerTypes[2]
     print(f'Current tracking algorithm is {TrackerType}.')
-    EXTENSINO, GT_THRESHOLD, t_threshold, V = 'png', 0.3, 0.2, '0.6.2'
+    EXTENSINO, GT_THRESHOLD, t_threshold, V = 'png', 0.3, 0.1, '0.7'
 
     out_folder = join(infer_path, f'v{V}_{TrackerType}_{GT_THRESHOLD}_{t_threshold}')
     if not os.path.exists(out_folder):

@@ -12,14 +12,14 @@ There will be an video, tracked result txt fie, and key frames in output. Output
 ### Default Setting
 1. Detection threshold: 0.1
 2. Ground truth threshold: 0.3
-3. Tracked IoU threshold: 0.3
-4. Tracked only (no detection) IoU threshold: 0.6
-5. Cosine similarity threshold: 0.9
+3. Tracked IoU threshold: 0.1
+4. Tracked only (no detection) IoU threshold: 0.1
+5. Cosine similarity threshold: 0.95
 6. Tracker age: 3 
 
 ### Key points:<br>
 1. The workflow is based on SORT;<br>
-2. Tracking algorithm is from openCV API, default is 'medianflow';<br>
+2. Tracking algorithm is from openCV API, default is 'KCF';<br>
 3. Data association algorithm is Hungarian algorithm (which can be further replaced by more advanced algorithm, e.g. KM or feature releated algorithm);<br>
 
 ### Dependency
@@ -32,6 +32,8 @@ There will be an video, tracked result txt fie, and key frames in output. Output
     * Key frame extraction
 2. 20201223
     * Consine similarity on RoI image
+3. 20201221
+    * Add track id
 
 ### TODO
 1. Consine similarty on RoI features

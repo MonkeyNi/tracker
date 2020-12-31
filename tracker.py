@@ -7,7 +7,7 @@ import numpy as np
 
 
 class Tracker():
-    def __init__(self, infos, trackerType, age=2):
+    def __init__(self, infos, trackerType, track_id=0, age=10):
         """
         Initialize a tracker with frame and detection information.
         Args:
@@ -34,6 +34,8 @@ class Tracker():
         self.key_frame = infos
         self.key_f_score = self.key_frame[1][1]
         self.key_start = start
+        # track id
+        self.track_id = track_id
     
     def get_smoothed_cors(self, n, extra_box=False):
         """
@@ -51,11 +53,12 @@ class Tracker():
         Args:
             old (Tracker): old tracker keeps key frame information
         """
+        self.track_id = old.track_id
         self.tracked_pool = old.tracked_pool
         # record start
         self.key_start = old.key_start
         # update key frame
-        if self.key_f_score < old.key_f_score:
+        if self.key_f_score + 0.1 < old.key_f_score:
             self.key_frame = old.key_frame
             self.key_f_score = old.key_f_score
 
@@ -82,7 +85,7 @@ class Tracker_pool():
     def update_all(self, maximum_trackers=5):
         # get key frames
         key_trackers = [t for t in self.trackers if t.age < 0]
-        key_frames = [t.key_frame + [t.key_start] for t in key_trackers]
+        key_frames = [t.key_frame + [t.key_start, t.track_id] for t in key_trackers]
         
         self.trackers = [t for t in self.trackers if t.age >= 0]
         self.trackers = self.trackers[-maximum_trackers:]
@@ -132,19 +135,20 @@ class Tracking():
                  tracker_pool,
                  tracked_threshold=0.25,
                  gt_threshold=0.3,
-                 TrackerType='MEDIANFLOW'):
+                 TrackerType='MEDIANFLOW',
+                 track_id=0):
         """
         Do tracking for single frame
 
         Args:
             image (str): frame name
             frame (np.array): current frame
-            infos ([[]]): [[x1,y1,x2,y2,cla_id,score,detected]]
+            infos ([[]]): [[x1,y1,x2,y2,cla_id,score,track_id]]
             tracker_pool: Trackers
             tracked_threshold: threshold determine if tracked
 
         Returns:
-            tracked_info: [[x1,y1,x2,y2,cla_id,score,detected]]
+            tracked_info: [[x1,y1,x2,y2,cla_id,score,track_id]]
             tracer_pool: updated tracker pool
             tracked_time: []
         """
@@ -157,10 +161,11 @@ class Tracking():
         self.gt_threshold = gt_threshold
         self.t_Type = TrackerType
         self.bboxes, self.scores, self.cats = [], [], []
+        self.track_id = track_id
 
     def update(self):
         infos, tracker_pool, frame = self.infos, self.tracker_pool, self.frame
-        # tracked_info = [[t.bbox, t.age] for t in tracker_pool.trackers]  # for test
+        # tracked_info = [[t.bbox, t.age, t.track_id] for t in tracker_pool.trackers]  # for test
         # print(tracked_info)
         GT_THRESHOLD = self.gt_threshold
         only_tracked = 0  # for test
@@ -173,7 +178,11 @@ class Tracking():
                 for i, box in enumerate(self.bboxes):
                     score, catid = float(infos[i][-2]), infos[i][-3]
                     if score >= GT_THRESHOLD:
-                        tracker_pool.add(Tracker([[self.image, frame], [box, score, catid]], self.t_Type))
+                        _track_id = next(self.track_id)
+                        tracker_pool.add(Tracker([[self.image, frame], [box, score, catid]],
+                                                 self.t_Type,
+                                                 track_id=_track_id))
+                        infos[i][-1] = _track_id
             ## 2 compare det results first (dets and box in tracker pool), which can save some track time
             else:
                 tracker_bboxes = [t.bbox for t in tracker_pool.trackers]
@@ -218,6 +227,11 @@ class Tracking():
                             infos[m] = tmp_infos[i]
                         for i, m in enumerate(unmatched_trs):
                             tracker_pool.trackers[m] = tmp_t_pool.trackers[i]
+                    # This will show all tracked box (need to block nms)
+                    # for b in tracked_boxes:
+                    #     tmp = b + [1, 0.444, 2]
+                    #     infos.append(tmp)
+
 
         ## 3 If there is no detection, update all tracker status and show tracker prediction
         else:
@@ -275,6 +289,7 @@ class Tracking():
                     smoothed_b = tracker_pool.trackers[i].get_smoothed_cors(5, extra_box=[info[:4], info[4]])
                     smoothed_boxes.append(smoothed_b)
                     infos[i][:4] = smoothed_b
+                    infos[i][-1] = tracker_pool.trackers[i].track_id
                 else:
                     infos[i][:4] = [0]*4
             ## TODO: try to use image features cosine similarity instead of image (if need)
@@ -290,7 +305,7 @@ class Tracking():
         """
         for m in matched:
             infos[m[0]][-2] = min((infos[m[0]][-2] + self.gt_threshold + 0.01), 0.99)
-            infos[m[0]][-1] = 1
+            infos[m[0]][-1] = tracker_pool.trackers[m[1]].track_id
             tracker_pool.update(m[1], state=1)
             # compute smooth cors
             tracker_pool.update_match(m[1], self.tmp_infos(m[0], box, scores, cats))
@@ -308,7 +323,9 @@ class Tracking():
         for m in unmatched_detections:
             if scores[m] >= self.gt_threshold:
                 _info = self.tmp_infos(m, box, scores, cats)
-                tracker_pool.add(Tracker(_info, self.t_Type))
+                _track_id = next(self.track_id)
+                tracker_pool.add(Tracker(_info, self.t_Type, track_id=_track_id))
+                self.infos[m][-1] = _track_id
 
     def unmatched_ts(self, unmatched_trackers, tracker_pool, tracked_boxes):
         """
