@@ -34,6 +34,8 @@ There will be an video, tracked result txt fie, and key frames in output. Output
     * Consine similarity on RoI image
 3. 20201221
     * Add track id
-
+4. 20210108
+    * Add new tracker: ECO
+    
 ### TODO
 1. Consine similarty on RoI features

@@ -6,7 +6,7 @@ import numpy as np
 import time
 from utils import get_infos, save_key_frames, get_id
 from visualization import read_images, get_FPS, draw_box
-from tracker import Tracker, Tracker_pool, Tracking
+from tracker_eco import Tracker, Tracker_pool, Tracking
 from itertools import count
 
 
@@ -20,7 +20,7 @@ def create_video(imgs, video_out='ori_tracked.avi'):
     h, w, c = list(imgs.values())[0].shape
     fourcc = cv2.VideoWriter_fourcc(*'MJPG')
     fps = FPS
-    w = 565
+    # w = 565
     out = cv2.VideoWriter(join(out_folder, video_out), fourcc, fps, (2*w, h))  
     # for testing
     out_images = join(out_folder, video_out)
@@ -121,8 +121,8 @@ if __name__ == '__main__':
 
 
     basic_box = join(os.getcwd(), 'bbox.png')
-    trackerTypes = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
-    TrackerType = trackerTypes[2]
+    trackerTypes = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT', 'ECO']
+    TrackerType = trackerTypes[-1]
     print(f'Current tracking algorithm is {TrackerType}.')
     EXTENSINO, GT_THRESHOLD, t_threshold, V = 'png', 0.3, 0.1, '0.7'
 

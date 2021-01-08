@@ -1,0 +1,16 @@
+%YAML:1.0
+---
+detect_thresh: 9.0000000000000000e-01
+sigma: 2.0000000298023224e-01
+lambda: 9.9999997473787516e-05
+interp_factor: 7.5000002980232239e-02
+output_sigma_factor: 6.2500000000000000e-02
+resize: 1
+max_patch_size: 640000
+split_coeff: 1
+wrap_kernel: 0
+desc_npca: 1
+desc_pca: 2
+compress_feature: 1
+compressed_size: 2
+pca_learning_rate: 1.5000000596046448e-01

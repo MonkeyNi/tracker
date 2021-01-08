@@ -4,10 +4,11 @@ import collections
 import numpy as np
 import time
 from visualization import draw_box
+from eco import ECOTracker
 
 
 def createTrackerByName(trackerType):
-    trackerTypes = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
+    trackerTypes = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT', 'ECO']
 
     # Create a tracker based on tracker name
     if trackerType == trackerTypes[0]:
@@ -26,10 +27,18 @@ def createTrackerByName(trackerType):
         tracker = cv2.TrackerMOSSE_create()
     elif trackerType == trackerTypes[7]:
         tracker = cv2.TrackerCSRT_create()
+    elif trackerType == trackerTypes[8]:
+        tracker = ECOTracker(True)
     else:
         tracker = None
         print('Incorrect tracker name')
         print('Available trackers are: {}'.format(trackerTypes))
+    
+    # update tracker parameters
+    # params = cv2.FileStorage("params.yaml", cv2.FILE_STORAGE_READ)
+    # # params.write('detect_thresh', 0.6)
+    # tracker.read(params.root())
+    # params.release()
     return tracker
 
 
@@ -107,7 +116,6 @@ def get_track_bboxes(frame, tracker_pool):
         track = tracker.tracker
         start = time.time()
         success, track_boxes = track.update(frame)
-        # print(f'***{success}')
         end = time.time()
         tracked_time.append((end-start))
         if not success:
