@@ -13,9 +13,9 @@ There will be an video, tracked result txt fie, and key frames in output. Output
 1. Detection threshold: 0.1
 2. Ground truth threshold: 0.3
 3. Tracked IoU threshold: 0.1
-4. Tracked only (no detection) IoU threshold: 0.1
-5. Cosine similarity threshold: 0.95
-6. Tracker age: 3 
+4. Tracked only (no detection) IoU threshold (no need for eco): 0.1
+5. Cosine similarity threshold (no need for eco): 0.95
+6. Tracker age: 10
 
 ### Key points:<br>
 1. The workflow is based on SORT;<br>
@@ -38,4 +38,8 @@ There will be an video, tracked result txt fie, and key frames in output. Output
     * Add new tracker: ECO
     
 ### TODO
-1. Consine similarty on RoI features
+1. Test ECO, speed up ECO
+
+### ECO Code Reference
+1. Official Matlab: https://github.com/martin-danelljan/ECO
+2. Python: https://github.com/StrangerZhang/pyECO
