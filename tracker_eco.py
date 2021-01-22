@@ -115,12 +115,6 @@ class Tracker_pool():
         self.trackers = self.trackers[-maximum_trackers:]
         return key_frames
 
-    def update_miss(self):
-        if self.empty():
-            return
-        for i in range(len(self.trackers)):
-            self.trackers[i].age -= 1
-
     def empty(self):
         return True if len(self.trackers) == 0 else False
     
@@ -242,8 +236,9 @@ class Tracking():
         only_tracked = 0  # for test
         if tracked_boxes == []:
             tracked_boxes, self.tracked_time = get_track_bboxes(self.frame, tracker_pool)
-        if len(tracked_boxes) == 1 and set(tracked_boxes[0]) == {0}:
-            pass
+        
+        if tracked_boxes == [[0, 0, 5, 5]]:
+            tracker_pool.update(0, state=0)
         elif len(tracked_boxes) != 0:
             for i in range(len(tracked_boxes)):
                 tracker_pool.update(i, state=1)
