@@ -8,7 +8,7 @@ from interval import Interval
 
 
 class Tracker():
-    def __init__(self, infos, trackerType, track_id=0, age=10):
+    def __init__(self, infos, trackerType, track_id=0, age=7):
         """
         Initialize a tracker with frame and detection information.
         Args:
@@ -37,9 +37,11 @@ class Tracker():
         self.key_start = start
         # track id
         self.track_id = track_id
-        # tracker live, if sum(live_poo) >= 3, remove the tracker
+        # tracker live, if sum(live_pool) >= 3, remove the tracker
         self.live_pool = [0]*5
         self.latest_gt = self.bbox
+        # for tracker initialization
+        self.true_init = [4, 6, False]  # there should be at least 3 match in the first 5 frames
     
     def get_smoothed_cors(self, n, extra_box=False):
         """
@@ -74,7 +76,6 @@ class Tracker():
             frame = infos[0][1]
             bbox_wh = [bbox[0], bbox[1], dw, dh]
             self.tracker.init(frame, bbox_wh)
-            # print(f'Reinitiate {infos[0][0]}')
         
         shape_threshold = Interval(0.5, 1.5)
         if not rw in shape_threshold or not rh in shape_threshold:
@@ -82,7 +83,6 @@ class Tracker():
                 frame = infos[0][1]
                 bbox_wh = [bbox[0], bbox[1], dw, dh]
                 self.tracker.init(frame, bbox_wh)
-                # print(f'Reinitiate {infos[0][0]}')
 
 
 class Tracker_pool():
@@ -100,17 +100,17 @@ class Tracker_pool():
 
     def update(self, i, state=0):
         if state >= 1:
-            self.trackers[i].age = 10  # reinitialize age
+            self.trackers[i].age = 7  # reinitialize age
         else:
             self.trackers[i].age -= 1
 
     def update_all(self, maximum_trackers=5):
         # get key frames
-        key_trackers = [t for t in self.trackers if t.age < 0 or sum(t.live_pool) >= 3]
+        key_trackers = [t for t in self.trackers if t.age < 0 or sum(t.live_pool) >= 10]
         # key_trackers = [t for t in self.trackers if t.age < 0]
         key_frames = [t.key_frame + [t.key_start, t.track_id] for t in key_trackers]
         
-        self.trackers = [t for t in self.trackers if t.age >= 0 and sum(t.live_pool) < 3]
+        self.trackers = [t for t in self.trackers if t.age >= 0 and sum(t.live_pool) < 10]
         # self.trackers = [t for t in self.trackers if t.age >= 0]
         self.trackers = self.trackers[-maximum_trackers:]
         return key_frames
@@ -137,7 +137,7 @@ class Tracking():
                  frame,
                  infos,
                  tracker_pool,
-                 tracked_threshold=0.25,
+                 tracked_threshold=0.2,
                  gt_threshold=0.3,
                  TrackerType='MEDIANFLOW',
                  track_id=0):
@@ -169,8 +169,6 @@ class Tracking():
 
     def update(self):
         infos, tracker_pool, frame = self.infos, self.tracker_pool, self.frame
-        # tracked_info = [[t.bbox, t.age, t.track_id] for t in tracker_pool.trackers]  # for test
-        # print(tracked_info)
         GT_THRESHOLD = self.gt_threshold
         only_tracked = 0  # for test
         if not infos[0][:4] == [0]*4:
@@ -191,6 +189,7 @@ class Tracking():
             else:
                 # get tracked bbox
                 tracked_boxes, self.tracked_time = get_track_bboxes(frame, tracker_pool)
+
                 matched_dets, unmatched_dets, unmatched_trs = associate_detections_to_trackers(
                         self.bboxes,
                         tracked_boxes,
@@ -212,14 +211,25 @@ class Tracking():
             infos, only_tracked = self.track_only_update(self.tracker_pool, infos=self.infos)
 
         # NMS
+        tracker_id = min([i[-1] for i in infos])
         keep = nms([info[:4]+[info[5]] for info in infos])
         delete = nms_2([info[:-1] for info in infos])
         for i in range(len(infos)):
             if i not in keep or i in delete:
                 infos[i][:4] = [0]*4
+            else:
+                infos[i][-1] = tracker_id
         key_frames = tracker_pool.update_all()
         if len(key_frames) != 0:
             key_frames.append(get_id(self.image))
+        
+        # remove duplicate trackers
+        if len(tracker_pool.trackers) > 0:
+            self.tracker_clean(tracker_pool)
+
+        # check tracker initiate
+        self.tracker_init_check(tracker_pool)
+
         return infos, tracker_pool, self.tracked_time, key_frames, only_tracked
 
     def track_only_update(self, tracker_pool, infos=[], tracked_boxes=[]):
@@ -237,13 +247,15 @@ class Tracking():
         if tracked_boxes == []:
             tracked_boxes, self.tracked_time = get_track_bboxes(self.frame, tracker_pool)
         
-        if tracked_boxes == [[0, 0, 5, 5]]:
-            tracker_pool.update(0, state=0)
-        elif len(tracked_boxes) != 0:
+        if len(tracked_boxes) != 0:
+            for i, ele in enumerate(tracked_boxes):
+                if ele == [0, 0, 5, 5]:
+                    tracker_pool.update(i, state=0)
+                else:
+                    tracker_pool.update(i, state=1)
             for i in range(len(tracked_boxes)):
-                tracker_pool.update(i, state=1)
-
-            infos = generate_tracked_info(tracked_boxes, tracker_pool, self.gt_threshold)
+                if tracker_pool.trackers[i].true_init[2]:
+                    infos = generate_tracked_info(tracked_boxes, tracker_pool, self.gt_threshold)
             for i, info in enumerate(infos):
                 infos[i][-1] = tracker_pool.trackers[i].track_id
 
@@ -256,12 +268,19 @@ class Tracking():
         Tracker prediction match dets
         """
         for m in matched:
-            infos[m[0]][-2] = min((infos[m[0]][-2] + self.gt_threshold + 0.01), 0.99)
-            infos[m[0]][-1] = tracker_pool.trackers[m[1]].track_id
-            tracker_pool.update(m[1], state=1)
+            # Initialization successful
+            if tracker_pool.trackers[m[1]].true_init[2]:
+                infos[m[0]][-2] = min((infos[m[0]][-2] + self.gt_threshold + 0.01), 0.99)
+                infos[m[0]][-1] = tracker_pool.trackers[m[1]].track_id
+                tracker_pool.update(m[1], state=1)
             
-            # just show tracded result
-            infos[m[0]][:4] = tracked_box[m[1]]
+                # just show tracded result
+                infos[m[0]][:4] = tracked_box[m[1]]
+            else:
+                # if true init
+                tracker_pool.trackers[m[1]].true_init[0] -= 1
+                tracker_pool.trackers[m[1]].true_init[1] -= 1
+            
 
             # update trackers
             if scores[m[0]] >= self.gt_threshold:
@@ -297,6 +316,12 @@ class Tracking():
                     _track_id = next(self.track_id)
                     tracker_pool.add(Tracker(_info, self.t_Type, track_id=_track_id))
                     self.infos[m][-1] = _track_id
+        
+        # if true init
+        for i in range(len(tracker_box)):
+            if not tracker_pool.trackers[i].true_init[2]:
+                tracker_pool.trackers[i].true_init[0] -= 1
+                tracker_pool.trackers[i].true_init[1] -= 1
 
     def unmatched_ts(self, unmatched_trackers, tracker_pool, tracked_boxes):
         """
@@ -308,6 +333,11 @@ class Tracking():
         update_infos, _ = self.track_only_update(_t_pool, tracked_boxes=_ted_box)
         for i, m in enumerate(unmatched_trackers):
             tracker_pool.trackers[m] = _t_pool.trackers[i]
+            
+            if not tracker_pool.trackers[m].true_init[2]:
+                # if true init
+                tracker_pool.trackers[m].true_init[0] -= 1
+                tracker_pool.trackers[m].true_init[1] -= 1
         return update_infos
 
     def tmp_infos(self, ind, bboxes, scores, cats):
@@ -315,3 +345,35 @@ class Tracking():
         Help function
         """
         return [[self.image, self.frame], [bboxes[ind], scores[ind], cats[ind]]]
+
+    def tracker_clean(self, tracker_pool):
+        """
+        Remove duplicate trackers
+        """
+        # This is assume that no more than 2 trackers...
+        # TODO: need more accurate process
+        tracker_id = min([t.track_id for t in tracker_pool.trackers])
+
+        tracker_infos = [t.bbox+[t.score] for t in tracker_pool.trackers]
+        keep = nms(tracker_infos)
+        delete = nms_2([t.bbox+[t.cat]+[t.score] for t in tracker_pool.trackers])
+        if len(keep) == len(tracker_infos) and not delete:
+            return
+        trackers = tracker_pool.trackers
+        for i in range(len(trackers)-1, 0, -1):
+            if not i in keep or i in delete:
+                tracker_pool.trackers.pop(i)
+            else:
+                tracker_pool.trackers[i].track_id = tracker_id
+    
+    def tracker_init_check(self, tracker_pool):
+        """
+        Remove false initiate trackers
+        """
+        for i in range(len(tracker_pool.trackers)-1, -1, -1):
+            if not tracker_pool.trackers[i].true_init[2]:
+                tr = tracker_pool.trackers[i].true_init
+                if tr[1] >= 0 and tr[0] <= 0:
+                    tracker_pool.trackers[i].true_init[2] = True
+                elif tr[1] == 0 and tr[0] > 0:
+                    tracker_pool.delete(i)

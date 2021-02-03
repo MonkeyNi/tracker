@@ -83,6 +83,13 @@ def get_infos(images, infer_txt):
             x1, y1, x2, y2 = info[:4]
             x1, y1 = max(0, float(x1)), max(0, float(y1))
             # x2, y2 = min(x2, w-1), min(y2, h-1)
+            w, h = float(x2)-x1, float(y2)-y1
+            
+            # For ECO tracker, w, h should be larger than 5%
+            # TODO: replace hard value with percnetage
+            if w <= 36 or h <= 25:
+                continue
+            
             info[:4] = [x1, y1, x2, y2]
             score = float(info[5])
             info = [int(float(x)) for x in info]
@@ -112,14 +119,21 @@ def get_track_bboxes(frame, tracker_pool):
     """
     h, w, _ = frame.shape
     tracked_boxes, tracked_time = [], []
-    for tracker in tracker_pool.trackers:
+    for i, tracker in enumerate(tracker_pool.trackers):
         track = tracker.tracker
         start = time.time()
+
         success, track_boxes = track.update(frame)
+
         end = time.time()
         tracked_time.append((end-start))
+        
+        # tracker_pool.trackers[i].live_pool.pop(0)
         if not success:
             track_boxes = [0, 0, 5, 5]
+            tracker_pool.trackers[i].live_pool.append(1)
+        # else:
+            # tracker_pool.trackers[i].live_pool.append(0)
         tracked_boxes.extend([track_boxes])
     tracked_boxes = [cor_change(list(box), h, w) for box in tracked_boxes]
     return tracked_boxes, tracked_time
@@ -262,7 +276,7 @@ def compute_intersect(rec1, rec2):
         return intersect
 
 
-def nms_2(infos, thresh=0.9):
+def nms_2(infos, thresh=0.5):
     """
     This function is used to deal with small/big overlap problem
     """

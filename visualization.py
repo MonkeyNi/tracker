@@ -26,8 +26,8 @@ def read_images(video):
     frame_id = count()
     images = {}
     while success:
-        the_id = str(next(frame_id)).zfill(5)
-        # img = img[:, -565:, :]
+        the_id = str(next(frame_id)).zfill(7)
+        img = img[:, -565:, :]
         images[f'frame_{the_id}.png'] = img
         success, img = vidcap.read()
     vidcap.release()
