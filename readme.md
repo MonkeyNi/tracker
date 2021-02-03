@@ -36,6 +36,9 @@ There will be an video, tracked result txt fie, and key frames in output. Output
     * Add track id
 4. 20210108
     * Add new tracker: ECO
+5. 20210203
+    * Update OpenCV tracker code
+    * Strict initialization for ECO
     
 ### TODO
 1. Test ECO, speed up ECO
