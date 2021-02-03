@@ -9,18 +9,41 @@ Detection result should has format:
 ```
 There will be an video, tracked result txt fie, and key frames in output. Output will be saved at the same folder as 'detection result'.
 
-### Default Setting
+### ECO Setting
+* Age (default age / maximum wrong prediction. Smaller age will cause duplicate key frames): 10/10
+* Score: 0.012
+* HOG (dimnesion / cell size): 11/4
+* CN (dimnesion / cell size): 2/4
+* IC (dimnesion / cell size): 1/3
+* CG iterations for initialization: 2
+* CG iterations for update: 2
+* GN iterations for optimize projection matric: 1
+* Minimum input side: 100
+* Sample size (min/max): 10/40
+* Search scale: 2
+* LR: 0.009
+
+### ECO Result (zsm2)
+* Sensitivity: 0.6116
+* Specificity: 0.9524
+* For easy case (test1, test2), it works very well.
+* CG iterations cannot be 1. It will have huge effect on accuracy. 
+* HOG is the main feature. Its cell size cannot be smaller.
+* In theory, seach scale should be decrease with decrease of input size. With lots of experiments, 2 is always a good choice.
+* Default LR is good.
+
+### Key points:<br>
+1. The workflow is based on SORT;<br>
+2. Tracking algorithm is ECO (python);<br>
+3. Data association algorithm is Hungarian algorithm (which can be further replaced by more advanced algorithm, e.g. KM or feature releated algorithm);<br>
+
+### OpenCV Setting (MedianFlow)
 1. Detection threshold: 0.1
 2. Ground truth threshold: 0.3
 3. Tracked IoU threshold: 0.1
 4. Tracked only (no detection) IoU threshold (no need for eco): 0.1
 5. Cosine similarity threshold (no need for eco): 0.95
 6. Tracker age: 10
-
-### Key points:<br>
-1. The workflow is based on SORT;<br>
-2. Tracking algorithm is from openCV API, default is 'KCF';<br>
-3. Data association algorithm is Hungarian algorithm (which can be further replaced by more advanced algorithm, e.g. KM or feature releated algorithm);<br>
 
 ### Dependency
 1. OpenCV
@@ -38,10 +61,8 @@ There will be an video, tracked result txt fie, and key frames in output. Output
     * Add new tracker: ECO
 5. 20210203
     * Update OpenCV tracker code
-    * Strict initialization for ECO
-    
-### TODO
-1. Test ECO, speed up ECO
+    * Strict initialization for ECO: for each det, if it has 4 consecutive pre-dets, then it can be initialized
+
 
 ### ECO Code Reference
 1. Official Matlab: https://github.com/martin-danelljan/ECO

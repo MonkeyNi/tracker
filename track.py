@@ -4,7 +4,7 @@ from os.path import join
 import argparse
 import numpy as np
 import time
-from utils import get_infos, save_key_frames, get_id
+from utils import get_infos, save_key_frames, get_id, check_consecutive_dets
 from visualization import read_images, get_FPS, draw_box
 from tracker_eco import Tracker, Tracker_pool, Tracking
 from itertools import count
@@ -61,10 +61,23 @@ def Track():
     end_image = get_id(list(basic_images.keys())[-1])
     only_T = 0
     track_id = count(start=1)
+    
+    # version 2: for strict initization
+    info_pool = []
+
     for image in images:
         print(f'\rCurrent processing frame is: {image}', end="")
         frame = basic_images[image]
         infos = images[image]
+        
+        # for strict initialization
+        if len(info_pool) == 5:
+            info_pool = info_pool[1:]
+        info_pool.append(infos)
+        if len(info_pool) != 5:
+            continue
+        init_flag = check_consecutive_dets(info_pool)
+        
         trackers.append(len(tracker_pool.trackers))
         start = time.time()
         tracking = Tracking(image,
@@ -74,7 +87,9 @@ def Track():
                             tracked_threshold=t_threshold,
                             gt_threshold=GT_THRESHOLD,
                             TrackerType=TrackerType,
-                            track_id=track_id)
+                            track_id=track_id,
+                            init_flag=init_flag)
+        
         tracked_infos, tracker_pool, tracked_time, key_frames, only_tracked = tracking.update()
         gap = time.time() - start
         end_to_end_time.append(gap)
@@ -124,7 +139,7 @@ if __name__ == '__main__':
     trackerTypes = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT', 'ECO']
     TrackerType = trackerTypes[-1]
     print(f'Current tracking algorithm is {TrackerType}.')
-    EXTENSINO, GT_THRESHOLD, t_threshold, V = 'png', 0.3, 0.1, '0.7.17.1'
+    EXTENSINO, GT_THRESHOLD, t_threshold, V = 'png', 0.3, 0.1, '0.8'
 
     out_folder = join(infer_path, f'v{V}_{TrackerType}_{GT_THRESHOLD}_{t_threshold}')
     if not os.path.exists(out_folder):

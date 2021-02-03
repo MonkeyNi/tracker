@@ -332,3 +332,70 @@ def get_id(name):
 def get_roi(box, frame):
     assert (len(box) == 4)
     return frame[box[1]:max(box[3], 5), box[0]:max(box[2], 5), :]
+
+
+def check_consecutive_dets(info_pool_ori):
+    """
+    Pool of 5 consecutive infos. To determine if the det should be initialized
+
+    Args:
+        infos ([[]]): [[x1,y1,x2,y2,cla_id,score,track_id]]
+    """
+    info_pool = info_pool_ori.copy()
+    info_pool = info_pool[::-1]
+    base_info = info_pool[0]
+    res = [False]*len(info_pool[0])
+    if not base_info:
+        return res
+    for i, info in enumerate(base_info):
+        if float(info[-2]) < 0.3:
+            continue
+        tmp = 0
+        check_info = info_pool[1:]
+        
+        def helper(base_bbox, check_info):
+            nonlocal tmp
+            if not check_info:
+                return
+            bboxes = [i[:4] for i in check_info[0]]
+            tmp_box = base_bbox
+            for i, box in enumerate(bboxes):
+                if float(check_info[0][i][-2]) < 0.1:
+                    continue
+                iou = compute_iou(base_bbox, box)
+                if iou >= 0.2:
+                    tmp += 1
+                    tmp_box = box
+                    break
+            helper(tmp_box, check_info[1:])
+        helper(info[:4], check_info)  
+        if tmp >= 4:
+            res[i] = True
+    return res
+
+
+def compute_iou(boxA, boxB):
+    # determine the (x, y)-coordinates of the intersection rectangle
+    xA = max(boxA[0], boxB[0])
+    yA = max(boxA[1], boxB[1])
+    xB = min(boxA[2], boxB[2])
+    yB = min(boxA[3], boxB[3])
+
+    # compute the area of intersection rectangle
+    interArea = abs(max((xB - xA, 0)) * max((yB - yA), 0))
+    if interArea == 0:
+        return 0
+    # compute the area of both the prediction and ground-truth
+    # rectangles
+    boxAArea = abs((boxA[2] - boxA[0]) * (boxA[3] - boxA[1]))
+    boxBArea = abs((boxB[2] - boxB[0]) * (boxB[3] - boxB[1]))
+
+    # compute the intersection over union by taking the intersection
+    # area and dividing it by the sum of prediction + ground-truth
+    # areas - the interesection area
+    iou = interArea / float(boxAArea + boxBArea - interArea)
+
+    # return the intersection over union value
+    return iou
+    
+    
