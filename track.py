@@ -8,6 +8,7 @@ from utils import get_infos, save_key_frames, get_id, check_consecutive_dets
 from visualization import read_images, get_FPS, draw_box
 from tracker_eco import Tracker, Tracker_pool, Tracking
 from itertools import count
+from collections import deque
 
 
 def create_video(imgs, video_out='ori_tracked.avi'):
@@ -21,7 +22,7 @@ def create_video(imgs, video_out='ori_tracked.avi'):
     fourcc = cv2.VideoWriter_fourcc(*'MJPG')
     fps = FPS
     w = 565
-    out = cv2.VideoWriter(join(out_folder, video_out), fourcc, fps, (2*w, h))  
+    out = cv2.VideoWriter(join(out_folder, video_out), fourcc, fps, (2*w, h))
     # for testing
     out_images = join(out_folder, video_out)
     out_images = out_images.replace('.avi', '')
@@ -33,19 +34,20 @@ def create_video(imgs, video_out='ori_tracked.avi'):
     track_infos = get_infos(list(imgs.keys()), join(out_folder, track_out))
 
     p_count = [0, 0]
+    det_flag = [True, False]
     for im in imgs:
         tmp = imgs[im].copy()
         ims = [imgs[im], tmp]
         d_info, t_info = detect_infos[im], track_infos[im]
         blank = np.zeros([h, 2*w, c], np.uint8)
         for i, infos in enumerate([d_info, t_info]):
-            if set(infos[0][:4]) != {0}:
-                img, flag = draw_box(ims[i], infos, GT_THRESHOLD, basic_box=basic_box)
-                if flag: p_count[i] += 1
-                blank[:, i*w:(i+1)*w, :] = img
-            else:
-                blank[:, i*w:(i+1)*w, :] = imgs[im]
+            img, flag = draw_box(ims[i], infos, GT_THRESHOLD, basic_box=basic_box, det=det_flag[i])
+            if flag: p_count[i] += 1
+            blank[:, i*w:(i+1)*w, :] = img
         out.write(blank)
+        
+        # cv2.imshow('1.png', img)
+        # cv2.waitKey(1)
         # cv2.imwrite(join(out_images, im), blank)
     print(f'After second threshold: {GT_THRESHOLD}, detected lesion increase from {p_count[0]} to {p_count[1]}.')
     out.release()
@@ -71,10 +73,10 @@ def Track():
         infos = images[image]
         
         # for strict initialization
-        if len(info_pool) == 5:
+        if len(info_pool) == 4:
             info_pool = info_pool[1:]
         info_pool.append(infos)
-        if len(info_pool) != 5:
+        if len(info_pool) != 4:
             continue
         init_flag = check_consecutive_dets(info_pool)
         
@@ -89,7 +91,6 @@ def Track():
                             TrackerType=TrackerType,
                             track_id=track_id,
                             init_flag=init_flag)
-        
         tracked_infos, tracker_pool, tracked_time, key_frames, only_tracked = tracking.update()
         gap = time.time() - start
         end_to_end_time.append(gap)
@@ -139,7 +140,7 @@ if __name__ == '__main__':
     trackerTypes = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT', 'ECO']
     TrackerType = trackerTypes[-1]
     print(f'Current tracking algorithm is {TrackerType}.')
-    EXTENSINO, GT_THRESHOLD, t_threshold, V = 'png', 0.3, 0.1, '0.8'
+    EXTENSINO, GT_THRESHOLD, t_threshold, V = 'png', 0.2, 0.05, '0.11'
 
     out_folder = join(infer_path, f'v{V}_{TrackerType}_{GT_THRESHOLD}_{t_threshold}')
     if not os.path.exists(out_folder):
@@ -151,7 +152,7 @@ if __name__ == '__main__':
     track_out = f'track_{infer_txt}'
     Track()
 
-    # FPS = get_FPS(video)  # get the FPS
+    FPS = get_FPS(video)  # get the FPS
 
     video_out = (f'{infer_txt}').replace('txt', 'avi')
-    # create_video(basic_images, video_out=video_out)
+    create_video(basic_images, video_out=video_out)

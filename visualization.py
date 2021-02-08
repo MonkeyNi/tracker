@@ -34,7 +34,7 @@ def read_images(video):
     return images
 
 
-def draw_box(img, infos, THRESHOLD, basic_box=False):
+def draw_box(img, infos, THRESHOLD, basic_box=False, det=True):
     """
     Args:
         infos (list[list]): [[x1,y1,x2,y2,catId,score,track_id]]
@@ -57,6 +57,8 @@ def draw_box(img, infos, THRESHOLD, basic_box=False):
     flag = False
     h, w, _ = img.shape
     for info in infos:
+        if info[:4] == [0]*4:
+            continue
         x1, y1, x2, y2, catId, score, track_id = info
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(w-1, x2), min(h-1, y2)

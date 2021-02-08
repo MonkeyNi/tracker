@@ -128,12 +128,12 @@ def get_track_bboxes(frame, tracker_pool):
         end = time.time()
         tracked_time.append((end-start))
         
-        # tracker_pool.trackers[i].live_pool.pop(0)
+        tracker_pool.trackers[i].live_pool.pop(0)
         if not success:
             track_boxes = [0, 0, 5, 5]
             tracker_pool.trackers[i].live_pool.append(1)
-        # else:
-            # tracker_pool.trackers[i].live_pool.append(0)
+        else:
+            tracker_pool.trackers[i].live_pool.append(0)
         tracked_boxes.extend([track_boxes])
     tracked_boxes = [cor_change(list(box), h, w) for box in tracked_boxes]
     return tracked_boxes, tracked_time
@@ -173,14 +173,18 @@ def iou_batch(det_bboxes, track_bboxes):
     w = np.maximum(0., x2 - x1)
     h = np.maximum(0., y2 - y1)
     wh = w * h
+    
     # compute IoU
-    iou = wh / ((det_bboxes[..., 2] - det_bboxes[..., 0]) * (det_bboxes[..., 3] - det_bboxes[..., 1])
-        + (track_bboxes[..., 2] - track_bboxes[..., 0]) * (track_bboxes[..., 3] - track_bboxes[..., 1]) - wh)
+    # iou = wh / ((det_bboxes[..., 2] - det_bboxes[..., 0]) * (det_bboxes[..., 3] - det_bboxes[..., 1])
+    #     + (track_bboxes[..., 2] - track_bboxes[..., 0]) * (track_bboxes[..., 3] - track_bboxes[..., 1]) - wh)
+    
     # compute overlap
-    # overlap_dets = wh / ((det_bboxes[..., 2] - det_bboxes[..., 0]) * (det_bboxes[..., 3] - det_bboxes[..., 1]))
-    # overlap_trs = wh / ((track_bboxes[..., 2] - track_bboxes[..., 0]) * (track_bboxes[..., 3] - track_bboxes[..., 1]))
-    # overlap = max(overlap_dets, overlap_trs)
-    return iou
+    overlap_dets = wh / ((det_bboxes[..., 2] - det_bboxes[..., 0]) * (det_bboxes[..., 3] - det_bboxes[..., 1]))
+    overlap_trs = wh / ((track_bboxes[..., 2] - track_bboxes[..., 0]) * (track_bboxes[..., 3] - track_bboxes[..., 1]))
+    overlap = np.maximum(overlap_dets, overlap_trs)
+    
+    # return iou
+    return overlap
 
 
 def associate_detections_to_trackers(detections, trackers, iou_threshold=0.3):
@@ -189,7 +193,6 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.3):
     
     iou_matrix = iou_batch(detections, trackers)
     # iou_matrix, overlap_matrix = iou_batch(detections, trackers)
-    # import pdb; pdb.set_trace()
     if min(iou_matrix.shape) > 0:
         a = (iou_matrix > iou_threshold).astype(np.int32)
         # one for one
@@ -295,7 +298,7 @@ def nms_2(infos, thresh=0.5):
             intersect = compute_intersect(box, che)
             if intersect == 0:
                 continue
-            if float(intersect)/areas[inds[i]] >= thresh and clas[inds[i]] == clas[inds[j]]:
+            if float(intersect)/areas[inds[i]] >= thresh:
                 flag = True
                 break
         if flag:
@@ -363,13 +366,13 @@ def check_consecutive_dets(info_pool_ori):
                 if float(check_info[0][i][-2]) < 0.1:
                     continue
                 iou = compute_iou(base_bbox, box)
-                if iou >= 0.2:
+                if iou >= 0.3:
                     tmp += 1
                     tmp_box = box
                     break
             helper(tmp_box, check_info[1:])
         helper(info[:4], check_info)  
-        if tmp >= 4:
+        if tmp >= 3:
             res[i] = True
     return res
 

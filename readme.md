@@ -10,8 +10,8 @@ Detection result should has format:
 There will be an video, tracked result txt fie, and key frames in output. Output will be saved at the same folder as 'detection result'.
 
 ### ECO Setting
-* Age (default age / maximum wrong prediction. Smaller age will cause duplicate key frames): 10/10
-* Score: 0.012
+* Age (default age / maximum wrong prediction. Smaller age will cause duplicate key frames): 5/ less than 7 amony 12 frames
+* Score: 0.45
 * HOG (dimnesion / cell size): 11/4
 * CN (dimnesion / cell size): 2/4
 * IC (dimnesion / cell size): 1/3
@@ -22,10 +22,12 @@ There will be an video, tracked result txt fie, and key frames in output. Output
 * Sample size (min/max): 10/40
 * Search scale: 2
 * LR: 0.009
+* For better use experience, dets and trs will be merged first and then smoothed (with previous 5) results will be showed. In this way, we can get smoother result. 
+* Use new 'overlap' for track: overlap = intersection / max(areaA, areaB)
 
 ### ECO Result (zsm2)
-* Sensitivity: 0.6116
-* Specificity: 0.9524
+* Sensitivity: 0.6186
+* Specificity: 0.9523
 * For easy case (test1, test2), it works very well.
 * CG iterations cannot be 1. It will have huge effect on accuracy. 
 * HOG is the main feature. Its cell size cannot be smaller.
@@ -62,6 +64,9 @@ There will be an video, tracked result txt fie, and key frames in output. Output
 5. 20210203
     * Update OpenCV tracker code
     * Strict initialization for ECO: for each det, if it has 4 consecutive pre-dets, then it can be initialized
+6. 20210208
+    * Use new overlap: overlap = intersection / max(areaA, areaB); it can deal with 'A is much larger than B situation';
+    * Fix some bugs
 
 
 ### ECO Code Reference
