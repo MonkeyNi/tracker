@@ -1,5 +1,10 @@
 ## Tracker for object detection
 
+
+### Install
+cd tracker/eco/features/
+python setup.py build_ext --inplace
+
 ### Test example
 ```
 python track.py --video test/test2.mp4 --detection_result test/results2_0.1.txt
