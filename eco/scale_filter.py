@@ -65,6 +65,7 @@ class ScaleFilter:
         scale_responsef = np.sum(self.sf_num * xsf, 0) / (self.sf_den + config.lamBda)
         interp_scale_response = np.real(ifft(resize_dft(scale_responsef, config.number_of_interp_scales)))
         recovered_scale_index = np.argmax(interp_scale_response)
+        
         if config.do_poly_interp:
             # fit a quadratic polynomial to get a refined scale estimate
             id1 = (recovered_scale_index - 1) % config.number_of_interp_scales
@@ -78,7 +79,7 @@ class ScaleFilter:
             scale_change_factor = - poly[1] / (2 * poly[0])
         else:
             scale_change_factor = self.interp_scale_factors[recovered_scale_index]
-        return scale_change_factor
+        return scale_change_factor, np.amax(interp_scale_response)
 
     def update(self, im, pos, base_target_sz, current_scale_factor):
         """

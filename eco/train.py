@@ -25,7 +25,8 @@ def inner_product_filter(xf, yf):
         xp = np
     ip = 0
     for i in range(len(xf[0])):
-        ip += 2 * xp.vdot(xf[0][i].flatten(), yf[0][i].flatten()) - xp.vdot(xf[0][i][:, -1, :].flatten(), yf[0][i][:, -1, :].flatten())
+        # ip += 2 * xp.vdot(xf[0][i].flatten(), yf[0][i].flatten()) - xp.vdot(xf[0][i][:, -1, :].flatten(), yf[0][i][:, -1, :].flatten())
+        ip += 2 * xp.vdot(xf[0][i], yf[0][i]) - xp.vdot(xf[0][i][:, -1, :], yf[0][i][:, -1, :])
     return xp.real(ip)
 
 def inner_product_joint(xf, yf):
@@ -46,10 +47,11 @@ def lhs_operation(hf, samplesf, reg_filter, sample_weights):
     """
         This is the left-hand-side operation in Conjugate Gradient
     """
-    if config.use_gpu:
-        xp = cp.get_array_module(hf[0][0])
-    else:
-        xp = np
+    # if config.use_gpu:
+    #     xp = cp.get_array_module(hf[0][0])
+    # else:
+    #     xp = np
+    xp = np
     num_features = len(hf[0])
     filter_sz = np.zeros((num_features, 2), np.int32)
     for i in range(num_features):
@@ -86,6 +88,7 @@ def lhs_operation(hf, samplesf, reg_filter, sample_weights):
     # W^H W f
     for i in range(num_features):
         reg_pad = min(reg_filter[i].shape[1] - 1, hf[0][i].shape[1]-1)
+        reg_pad = max(reg_pad, 1)
 
         # add part needed for convolution
         hf_conv = xp.concatenate([hf[0][i], xp.conj(xp.rot90(hf[0][i][:, -reg_pad-1:-1, :], 2))], axis=1)
@@ -93,7 +96,7 @@ def lhs_operation(hf, samplesf, reg_filter, sample_weights):
         if not config.use_gpu:
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", category=FutureWarning)
-                # do first convolution
+
                 hf_conv = convolve(hf_conv, reg_filter[i][:,:,np.newaxis,np.newaxis])
 
                 # do final convolution and put together result
@@ -104,6 +107,7 @@ def lhs_operation(hf, samplesf, reg_filter, sample_weights):
 
             # do final convolution and put together result
             hf_out[i] += convolve2d(hf_conv[:, :-reg_pad, :], reg_filter[i][:,:,cp.newaxis,cp.newaxis], 'valid')
+
     return [hf_out]
 
 
@@ -155,6 +159,7 @@ def lhs_operation_joint(hf, samplesf, reg_filter, init_samplef, XH, init_hf, pro
     # operation) add the regularization part
     for i in range(num_features):
         reg_pad = min(reg_filter[i].shape[1] - 1, hf[i].shape[1]-1)
+        reg_pad = max(reg_pad, 1)
 
         # add part needed for convolution
         hf_conv = xp.concatenate([hf[i], xp.conj(xp.rot90(hf[i][:, -reg_pad-1:-1, :], 2))], axis=1)
@@ -315,7 +320,6 @@ def preconditioned_conjugate_gradient(A, b, opts, M1, M2, ip,x0, state=None):
             for rr, qq in zip(r, q):
                 tmp.append([rr_ - alpha * qq_ for rr_, qq_ in zip(rr, qq)])
             r = tmp
-
     # save the state
     state['p'] = p
     state['rho'] = rho
@@ -339,6 +343,7 @@ def train_filter(hf, samplesf, yf, reg_filter, sample_weights, sample_energy, re
     # construct preconditioner
     diag_M = [(1 - config.precond_reg_param) * (config.precond_data_param * m + (1-config.precond_data_param)*xp.mean(m, 2, keepdims=True))+ \
               config.precond_reg_param * reg_energy_ for m, reg_energy_ in zip(sample_energy, reg_energy)]
+
     hf, _, CG_state = preconditioned_conjugate_gradient(
             lambda x: lhs_operation(x, samplesf, reg_filter, sample_weights), # A
             [rhs_samplef],                                                    # b

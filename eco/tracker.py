@@ -1,16 +1,15 @@
 import numpy as np
 import cv2
 import scipy
-import time
 
 
 from scipy import signal
-# from numpy.fft import fftshift
 
 from .config import config
 from .features import FHogFeature, TableFeature, mround, ResNet50Feature, VGG16Feature
 from .fourier_tools import cfft2, interpolate_dft, shift_sample, full_fourier_coeff,\
-        cubic_spline_fourier, compact_fourier_coeff, ifft2, fft2, sample_fs
+        cubic_spline_fourier, compact_fourier_coeff, ifft2, fft2, sample_fs,\
+        symmetrize_filter
 from .optimize_score import optimize_score
 from .sample_space_model import GMM
 from .train import train_joint, train_filter
@@ -140,7 +139,7 @@ class ECOTracker:
             bbox -- need xmin, ymin, width, height
         """
         # resize frame to target size (minmum side)
-        self.target_size = 200
+        self.target_size = 100
         h, w, _ = frame.shape
         self.ratio = self.target_size / min(h, w)
         self.t_h, self.t_w = int(h*self.ratio), int(w*self.ratio)
@@ -395,20 +394,22 @@ class ECOTracker:
                 for i in range(self._num_feature_blocks):
                     new_train_sample_norm += 2 * xp.real(xp.vdot(xlf_proj[i].flatten(), xlf_proj[i].flatten()))
                 self._gmm._gram_matrix[0, 0] = new_train_sample_norm
+
         self._hf_full = full_fourier_coeff(self._hf)
 
         if config.use_scale_filter and self._num_scales > 0:
             self._scale_filter.update(frame, self._pos, self._base_target_sz, self._current_scale_factor)
         self._frame_num += 1
 
-    def update(self, frame, train=True, vis=False):
+    def update(self, frame, train=True, vis=False, success_threshold=0.45):
+
         frame = cv2.resize(frame, (self.t_w, self.t_h))
         # target localization step
         xp = cp if config.use_gpu else np
         pos = self._pos
         old_pos = np.zeros((2))
-        # if track success or false, decide by socre variance
-        success, var_threshold = True, 0.025
+        # track success or false
+        success = False
         for _ in range(config.refinement_iterations):
             # if np.any(old_pos != pos):
             if not np.allclose(old_pos, pos):
@@ -438,8 +439,7 @@ class ECOTracker:
                               self._pad_sz[i][1]:self._output_sz[0]-self._pad_sz[i][1]] += scores_fs_feat[i]
 
                 # optimize the continuous score function with newton's method.
-                trans_row, trans_col, scale_idx, var_score = optimize_score(scores_fs, config.newton_iterations)
-                success = True if var_score < var_threshold else False
+                trans_row, trans_col, scale_idx = optimize_score(scores_fs, config.newton_iterations)
 
                 # show score
                 if vis:
@@ -451,31 +451,31 @@ class ECOTracker:
                        self.score = cp.asnumpy(self.score)
                     self.crop_size = self._img_sample_sz * self._current_scale_factor
 
-                if success:
-                    # compute the translation vector in pixel-coordinates and round to the cloest integer pixel
-                    translation_vec = np.array([trans_row, trans_col]) * (self._img_sample_sz / self._output_sz) * \
-                                        self._current_scale_factor * self._scale_factor[scale_idx]
-                    scale_change_factor = self._scale_factor[scale_idx]
+                # compute the translation vector in pixel-coordinates and round to the cloest integer pixel
+                translation_vec = np.array([trans_row, trans_col]) * (self._img_sample_sz / self._output_sz) * \
+                                    self._current_scale_factor * self._scale_factor[scale_idx]
+                scale_change_factor = self._scale_factor[scale_idx]
 
-                    # udpate position
-                    pos = sample_pos + translation_vec
+                # udpate position
+                pos = sample_pos + translation_vec
 
-                    if config.clamp_position:
-                        pos = np.maximum(np.array(0, 0), np.minimum(np.array(frame.shape[:2]), pos))
+                if config.clamp_position:
+                    pos = np.maximum(np.array(0, 0), np.minimum(np.array(frame.shape[:2]), pos))
 
-                    # do scale tracking with scale filter
-                    if self._num_scales > 0 and config.use_scale_filter:
-                        scale_change_factor = self._scale_filter.track(frame, pos, self._base_target_sz,
-                            self._current_scale_factor)
+                # do scale tracking with scale filter
+                if self._num_scales > 0 and config.use_scale_filter:
+                    scale_change_factor, success_socre = self._scale_filter.track(frame, pos, self._base_target_sz,
+                        self._current_scale_factor)
+                    success = True if success_socre >= success_threshold else False
 
-                    # udpate the scale
-                    self._current_scale_factor *= scale_change_factor
+                # udpate the scale
+                self._current_scale_factor *= scale_change_factor
 
-                    # adjust to make sure we are not to large or to small
-                    if self._current_scale_factor < self._min_scale_factor:
-                        self._current_scale_factor = self._min_scale_factor
-                    elif self._current_scale_factor > self._max_scale_factor:
-                        self._current_scale_factor = self._max_scale_factor
+                # adjust to make sure we are not to large or to small
+                if self._current_scale_factor < self._min_scale_factor:
+                    self._current_scale_factor = self._min_scale_factor
+                elif self._current_scale_factor > self._max_scale_factor:
+                    self._current_scale_factor = self._max_scale_factor
 
         # model udpate step
         if config.learning_rate > 0:
@@ -487,28 +487,32 @@ class ECOTracker:
             shift_sample_ = 2 * np.pi * (pos - sample_pos) / (sample_scale * self._img_sample_sz)
             xlf_proj = shift_sample(xlf_proj, shift_sample_, self._kx, self._ky)
 
-        # update the samplesf to include the new sample. The distance matrix, kernel matrix and prior weight are also updated
-        merged_sample, new_sample, merged_sample_id, new_sample_id = \
-                self._gmm.update_sample_space_model(self._samplesf, xlf_proj, self._num_training_samples)
+        if success:
+            # update the samplesf to include the new sample. The distance matrix, kernel matrix and prior weight are also updated
+            merged_sample, new_sample, merged_sample_id, new_sample_id = \
+                    self._gmm.update_sample_space_model(self._samplesf, xlf_proj, self._num_training_samples)
 
-        if self._num_training_samples < self._num_samples:
-            self._num_training_samples += 1
+            if self._num_training_samples < self._num_samples:
+                self._num_training_samples += 1
 
-        if config.learning_rate > 0:
-            for i in range(self._num_feature_blocks):
-                if merged_sample_id >= 0:
-                    self._samplesf[i][:, :, :, merged_sample_id:merged_sample_id+1] = merged_sample[i]
-                if new_sample_id >= 0:
-                    self._samplesf[i][:, :, :, new_sample_id:new_sample_id+1] = new_sample[i]
+            if config.learning_rate > 0:
+                for i in range(self._num_feature_blocks):
+                    if merged_sample_id >= 0:
+                        self._samplesf[i][:, :, :, merged_sample_id:merged_sample_id+1] = merged_sample[i]
+                    if new_sample_id >= 0:
+                        self._samplesf[i][:, :, :, new_sample_id:new_sample_id+1] = new_sample[i]
+
 
         # training filter
         if self._frame_num < config.skip_after_frame or \
                 self._frames_since_last_train >= config.train_gap:
-            # print("Train filter: ", self._frame_num)
+            
+
             new_sample_energy = [xp.real(xlf * xp.conj(xlf)) for xlf in xlf_proj]
             self._CG_opts['maxit'] = config.CG_iter
             self._sample_energy = [(1 - config.learning_rate)*se + config.learning_rate*nse
                                 for se, nse in zip(self._sample_energy, new_sample_energy)]
+
 
             # do conjugate gradient optimization of the filter
             self._hf, self._CG_state = train_filter(
@@ -521,11 +525,14 @@ class ECOTracker:
                                                  self._reg_energy,
                                                  self._CG_opts,
                                                  self._CG_state)
+
             # reconstruct the ful fourier series
             self._hf_full = full_fourier_coeff(self._hf)
             self._frames_since_last_train = 0
+
         else:
             self._frames_since_last_train += 1
+        
         if config.use_scale_filter:
             self._scale_filter.update(frame, pos, self._base_target_sz, self._current_scale_factor)
 

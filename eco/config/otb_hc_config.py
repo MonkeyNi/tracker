@@ -1,22 +1,22 @@
 class OTBHCConfig:
     fhog_params = {'fname': 'fhog',
                    'num_orients': 9,
-                   'cell_size': 3,
-                   'compressed_dim': 10,
+                   'cell_size': 4,
+                   'compressed_dim': 11,
                    }
 
     cn_params = {"fname": 'cn',
                  "table_name": "CNnorm",
                  "use_for_color": True,
                  "cell_size": 4,  # can not be too small, e.g. 2
-                 "compressed_dim": 3,
+                 "compressed_dim": 2,
                  }
 
     ic_params = {'fname': 'ic',
                  "table_name": "intensityChannelNorm6",
                  "use_for_color": False,
-                 "cell_size": 2,
-                 "compressed_dim": 3,
+                 "cell_size": 3,
+                 "compressed_dim": 1,
                  }
 
     features = [fhog_params, cn_params, ic_params]
@@ -30,24 +30,24 @@ class OTBHCConfig:
 
     # image sample parameters
     search_area_shape = 'square'        # the shape of the samples
-    search_area_scale = 2.0             # the scaling of the target size to get the search area
-    min_image_sample_size = 25 ** 2    # minimum area of image samples
-    max_image_sample_size = 100 ** 2    # maximum area of image samples
+    search_area_scale = 2          # the scaling of the target size to get the search area
+    min_image_sample_size = 10 ** 2    # minimum area of image samples
+    max_image_sample_size = 40 ** 2    # maximum area of image samples
 
     # detection parameters
     refinement_iterations = 1           # number of iterations used to refine the resulting position in a frame
-    newton_iterations = 5               # the number of Netwon iterations used for optimizing the detection score
+    newton_iterations = 2 #5               # the number of Netwon iterations used for optimizing the detection score
     clamp_position = False              # clamp the target position to be inside the image
 
     # learning parameters
     output_sigma_factor = 1 / 14.       # label function sigma
     learning_rate = 0.009               # learning rate
-    num_samples = 30                    # maximum number of stored training samples
+    num_samples = 10 #30                    # maximum number of stored training samples
     sample_replace_startegy = 'lowest_prior' # which sample to replace when the memory is full
     lt_size = 0                         # the size of the long-term memory (where all samples have equal weight)
     train_gap = 5                       # the number of intermediate frames with no training (0 corresponds to the training every frame)
-    skip_after_frame = 5             # after which frame number the sparse update scheme should start (1 is directly)
-    use_detection_sample = True         # use the sample that was extracted at the detection stage also for learning
+    skip_after_frame = 2             # after which frame number the sparse update scheme should start (1 is directly)
+    use_detection_sample = False         # use the sample that was extracted at the detection stage also for learning
 
     # factorized convolution parameters
     use_projection_matrix = True        # use projection matrix, i.e. use the factorized convolution formulation
@@ -61,9 +61,9 @@ class OTBHCConfig:
     distance_matrix_update_type = 'exact' # strategy for updating the distance matrix
 
     # CG paramters
-    CG_iter = 5                        # the number of Conjugate Gradient iterations in each update after the first time
-    init_CG_iter = 5*15            # the total number of Conjugate Gradient iterations used in the first time
-    init_GN_iter = 5                   # the number of Gauss-Netwon iterations used in the first frame (only if the projection matrix is updated)
+    CG_iter = 2 #5                        # the number of Conjugate Gradient iterations in each update after the first time
+    init_CG_iter = 2 #5*15            # the total number of Conjugate Gradient iterations used in the first time
+    init_GN_iter = 1 #5                   # the number of Gauss-Netwon iterations used in the first frame (only if the projection matrix is updated)
     CG_use_FR = False                   # use the Fletcher-Reeves or Polak-Ribiere formula in the Conjugate Gradient
     CG_standard_alpha = True            # use the standard formula for computing the step length in Conjugate Gradient
     CG_forgetting_rate = 50             # forgetting rate of the last conjugate direction
@@ -80,7 +80,7 @@ class OTBHCConfig:
 
     # interpolation parameters
     interp_method = 'bicubic'           # the kind of interpolation kernel
-    interp_bicubic_a = -0.75            # the parameter for the bicubic interpolation kernel
+    interp_bicubic_a = -0.55            # the parameter for the bicubic interpolation kernel
     interp_centering = True             # center the kernel at the feature sample
     interp_windowing = False            # do additional windowing on the Fourier coefficients of the kernel
 
