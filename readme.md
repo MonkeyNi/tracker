@@ -28,7 +28,7 @@ There will be an video, tracked result txt fie, and key frames in output. Output
 * Search scale: 2
 * LR: 0.009
 * For better use experience, dets and trs will be merged first and then smoothed (with previous 5) results will be showed. In this way, we can get smoother result. 
-* Use new 'overlap' for track: overlap = intersection / max(areaA, areaB)
+* Use new 'overlap' for track: overlap = intersection / min(areaA, areaB)
 
 ### ECO Result (zsm2)
 * Sensitivity: 0.6186
@@ -70,7 +70,7 @@ There will be an video, tracked result txt fie, and key frames in output. Output
     * Update OpenCV tracker code
     * Strict initialization for ECO: for each det, if it has 4 consecutive pre-dets, then it can be initialized
 6. 20210208
-    * Use new overlap: overlap = intersection / max(areaA, areaB); it can deal with 'A is much larger than B situation';
+    * Use new overlap: overlap = intersection / min(areaA, areaB); it can deal with 'A is much larger than B situation';
     * Fix some bugs
 
 
