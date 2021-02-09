@@ -2,7 +2,7 @@
 
 
 ### Install
-cd tracker/eco/features/
+cd tracker/eco/features/<br>
 python setup.py build_ext --inplace
 
 ### Test example
