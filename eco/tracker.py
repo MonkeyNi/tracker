@@ -439,7 +439,7 @@ class ECOTracker:
                               self._pad_sz[i][1]:self._output_sz[0]-self._pad_sz[i][1]] += scores_fs_feat[i]
 
                 # optimize the continuous score function with newton's method.
-                trans_row, trans_col, scale_idx = optimize_score(scores_fs, config.newton_iterations)
+                trans_row, trans_col, scale_idx, dffs_socre = optimize_score(scores_fs, config.newton_iterations)
 
                 # show score
                 if vis:
@@ -464,9 +464,9 @@ class ECOTracker:
 
                 # do scale tracking with scale filter
                 if self._num_scales > 0 and config.use_scale_filter:
-                    scale_change_factor, success_socre = self._scale_filter.track(frame, pos, self._base_target_sz,
+                    scale_change_factor, fdffs_socre = self._scale_filter.track(frame, pos, self._base_target_sz,
                         self._current_scale_factor)
-                    success = True if success_socre >= success_threshold else False
+                    success = True if fdffs_socre >= success_threshold else False
 
                 # udpate the scale
                 self._current_scale_factor *= scale_change_factor

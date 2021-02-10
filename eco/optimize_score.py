@@ -23,11 +23,6 @@ def optimize_score(scores_fs, iterations):
 
     # do the grid search step by finding the maximum in the sampled response for each scale
     sampled_scores = sample_fs(scores_fs)
-
-    # calculate score variance as threshold
-    # _ss = sampled_scores.copy()
-    # _ss_norm = (_ss-xp.amin(_ss))/(xp.amax(_ss)-xp.amin(_ss))
-    # var_score = np.var(_ss_norm)
     
     init_max_score = xp.max(sampled_scores, axis=(0, 1))
     max_idx = xp.reshape(sampled_scores, (-1, sampled_scores.shape[2])).argmax(axis=0)

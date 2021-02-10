@@ -29,6 +29,7 @@ There will be an video, tracked result txt fie, and key frames in output. Output
 * LR: 0.009
 * For better use experience, dets and trs will be merged first and then smoothed (with previous 5) results will be showed. In this way, we can get smoother result. 
 * Use new 'overlap' for track: overlap = intersection / min(areaA, areaB)
+* <b>fDSST</b> works better than <b>DSST</b>. DSST has defualt 5 scales while fDSST has 17 scales. fDSST use feature compression method to speed up and accuracy has been improved at the same time. It is difficult for DSST to deal with blur or occlusion situation, while fDSST can works well. I guess that it is beacuse of PCA feature compression. Based on my current setting, DSST is actually faster than fDSST. They will take <b>0.011s</b> and <b>0.013s</b> to initialize. But as I have mentioned, DSST has bad performance on blur or occlusion situation (those situations are common in endoscopy videos). It is difficult to set score threshold. We will continue to use fDSST. (Noted that fDSST is only proposed to be used in ECO-HC)
 
 ### ECO Result (zsm2)
 * Sensitivity: 0.6186
